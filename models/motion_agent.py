@@ -26,7 +26,7 @@ class MotionAgent:
         self.motion_history = {}
 
         print("Loading example prompt from example_prompt.txt, feel free to use your own prompt")
-        prompt = open("example_prompt.txt", "r").read() # loading the example prompt, feel free to use your own prompt
+        prompt = open("example_prompt.txt", "r", encoding='utf-8').read() # loading the example prompt, feel free to use your own prompt
         self.context.append({"role": "system", "content": prompt})
 
     def process_motion_dialogue(self, message):
@@ -42,14 +42,31 @@ class MotionAgent:
         # Update context with the new message
         self.context.append({"role": "user", "content": message})
         
-        # Create chat completion request
+        # # Create chat completion request
+        # model_name = "gpt-35-turbo"
+        # deployment = "gpt-35-turbo-Salsa"
+        # response = self.client.chat.completions.create(
+        #     model= deployment, # "gpt-4-turbo",
+        #     messages=self.context
+        # )
+
+        # response = self.client.completions.create(model="gpt-3.5-turbo-instruct",  # text-davinci-002	is deprecated
+        #                                      prompt=str(self.context),
+        #                                      temperature=0.5,
+        #                                      top_p=1,
+        #                                      max_tokens=77,
+        #                                      frequency_penalty=0,
+        #                                      presence_penalty=0)
         response = self.client.chat.completions.create(
             model="gpt-4-turbo",
-            messages=self.context
+            messages=self.context,
         )
+
         
         # Extract and store the assistant's response
         assistant_response = response.choices[0].message.content
+        assistant_response = assistant_response.replace('json', '').replace('`', '')
+        # assistant_response = response.choices[0].text
         # print(assistant_response)
         self.context.append({"role": "assistant", "content": assistant_response})
 
@@ -63,6 +80,7 @@ class MotionAgent:
             reasoning = json.loads(assistant_response)["reasoning"]
         except:
             reasoning = None
+
 
         # if the plan is not None, it means the user wants to generate a motion or reason on a motion
         if plan is not None:

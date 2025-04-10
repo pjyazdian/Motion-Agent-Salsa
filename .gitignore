@@ -165,3 +165,5 @@ checkpoints
 ckpt
 *.out
 *.pth
+*.zip
+*.mp4

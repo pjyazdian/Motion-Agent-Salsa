@@ -6,13 +6,48 @@ from utils.motion_utils import recover_from_ric, plot_3d_motion
 from utils.paramUtil import t2m_kinematic_chain
 import torch
 
+import os
+import sys
+
+# Path to the FFmpeg bin directory
+ffmpeg_path = r'S:\Payam\LAMMA\ffmpeg-master-latest-win64-gpl-shared\ffmpeg-master-latest-win64-gpl-shared\bin'
+import matplotlib as mpl
+import shutil
+
+ffmpeg_path = shutil.which("ffmpeg")
+mpl.rcParams["animation.ffmpeg_path"] = ffmpeg_path
+
+
+# Check if the path is already in the PATH variable
+if ffmpeg_path not in os.environ['PATH']:
+    # Add the path to the PATH environment variable
+    os.environ['PATH'] += os.pathsep + ffmpeg_path
+
+
+
 def motion_agent_demo():
     # Initialize the client
     client = AzureOpenAI(
-        api_key="********", # your api key
+        api_key="DDJ7XQo5NWYSxRGwOecZNt7VOwaEEBKWh8eJVWS7YqyCGarpMlviJQQJ99BDACBsN54XJ3w3AAABACOGm6nK", # your api key
         api_version="2024-10-21",
-        azure_endpoint="********" # your azure endpoint
+        azure_endpoint="https://salsa.openai.azure.com/" # your azure endpoint
     )
+
+    endpoint = "https://pjome-m9a36rct-eastus2.cognitiveservices.azure.com/"
+    model_name = "gpt-35-turbo"
+    deployment = "gpt-35-turbo-Salsa"
+    subscription_key = "uPN20WiZ0suB5YVbTkwkVjT8Rqdwudlg0fqMaZGu9uF9pQY5oHI4JQQJ99BDACHYHv6XJ3w3AAAAACOGtmqx"
+    api_version = "2024-12-01-preview"
+    client = AzureOpenAI(
+        api_version=api_version,
+        azure_endpoint=endpoint,
+        api_key=subscription_key,
+    )
+
+    # No Azure:
+    from openai import OpenAI
+    API_KEY = "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"
+    client = OpenAI(api_key=API_KEY)
 
     args = get_args_parser()
     args.save_dir = "./demo"
