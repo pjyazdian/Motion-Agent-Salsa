@@ -21,12 +21,12 @@ from matplotlib.patches import Rectangle
 from PIL import Image, ImageDraw, ImageFont
 from tabulate import tabulate
 
-from text2pose.posescript.posecodes import POSECODE_OPERATORS, MOTIONCODE_OPERATORS, TIMECODE_OPERATORS, distance_between_joint_pairs
-from text2pose.posescript.captioning_data import *
-from text2pose.posescript.captioning_data_ablation import *
-from test_payam import min_samples_to_cover
+from posecodes import POSECODE_OPERATORS, MOTIONCODE_OPERATORS, TIMECODE_OPERATORS, distance_between_joint_pairs
+from captioning_data import *
+from captioning_data_ablation import *
+from MS_Algorithms import min_samples_to_cover
 
-from text2pose.posescript.test_payam import single_path_finder
+from MS_Algorithms import single_path_finder
 device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 
 ################################################################################

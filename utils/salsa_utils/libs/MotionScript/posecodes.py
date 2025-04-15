@@ -10,9 +10,9 @@ import torch
 import numpy as np
 import math
 
-from text2pose.posescript.captioning_data import POSECODE_OPERATORS_VALUES, MOTIONCODE_OPERATORS_VALUES, TIMECODE_OPERTATOR_VALUES # ADD_POSECODE_KIND
+from captioning_data import POSECODE_OPERATORS_VALUES, MOTIONCODE_OPERATORS_VALUES, TIMECODE_OPERTATOR_VALUES # ADD_POSECODE_KIND
 
-from text2pose.posescript.test_payam import single_path_finder
+from MS_Algorithms import single_path_finder
 
 # Classes:
 # - Posecode (to be inherited from)

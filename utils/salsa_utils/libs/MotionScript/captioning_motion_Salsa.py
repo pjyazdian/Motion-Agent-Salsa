@@ -3,7 +3,12 @@ import math
 import os
 import pickle
 import random
-
+import os
+# os.environ["PYOPENGL_PLATFORM"] = "windows"
+try:
+    del os.environ['PYOPENGL_PLATFORM']
+except:
+    pass
 import time
 # $ streamlit run explore_posescript.py
 
@@ -14,27 +19,30 @@ import sys
 
 from captioning_data import AUGMENTATION_LENGTH, AUGMENTATION_PORTION
 
-local_path = "/localhome/pjomeyaz/Payam_Files/Projects/Gestcription/posescript/src/"
-sys.path.append(local_path)
+# local_path = "/localhome/pjomeyaz/Payam_Files/Projects/Gestcription/posescript/src/"
+# sys.path.append(local_path)
 
-import text2pose.config as config
-import text2pose.utils as utils
-import text2pose.utils_visu as utils_visu
-import text2pose.posescript.captioning as captioning_py
+
+
+import ms_config as config
+import ms_utils as utils
+import ms_utils_visu as utils_visu
+import captioning as captioning_py
 import warnings
 warnings.filterwarnings('ignore')
 import torch
 import nltk
 
 
-from test_payam import create_gif_with_blinking, merge_gifs_side_by_side
+from MS_Algorithms import create_gif_with_blinking, merge_gifs_side_by_side
 
 # get pose information
-dataID_2_pose_info = utils.read_posescript_json("ids_2_dataset_sequence_and_frame_index.json")
+# dataID_2_pose_info = utils.read_posescript_json("ids_2_dataset_sequence_and_frame_index.json")
 
 # setup body model
 device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
-body_model = BodyModel(bm_fname=config.SMPLH_NEUTRAL_BM, num_betas=config.n_betas)
+# body_model = BodyModel(bm_path=config.SMPLH_NEUTRAL_BM, num_betas=config.n_betas)
+body_model = BodyModel(bm_fname=config.SMPLH_NEUTRAL_BM, num_betas=config.n_betas, model_type='smplh')
 body_model.eval()
 body_model.to(device)
 
@@ -164,7 +172,7 @@ def visualize_frames(pose_seq_data, trans, name):
 
 # Shay
 def visualize_frames_SFU_SALSA(pose_seq_data, trans, Motioncodes4vis, name, org_path, poses_rotvec):
-    Mesh3D, Skeleton3D, Motioncodes, Merge, Dump_motioncodes = True, True, True, True, True
+    Mesh3D, Skeleton3D, Motioncodes, Merge, Dump_motioncodes = False, True, True, True, True
     if Dump_motioncodes:
         pickle.dump(Motioncodes4vis, open(f'out_temp/{name}/{name}_Motioncodes.mc', 'wb'))
     pose_seq_data =pose_seq_data.view(pose_seq_data.shape[0], -1)
@@ -173,7 +181,10 @@ def visualize_frames_SFU_SALSA(pose_seq_data, trans, Motioncodes4vis, name, org_
         print("Plotting 3D Mesh...")
         viewpoints = [[]]
 
-        imgs = utils_visu.anim_from_pose_data(torch.tensor(poses_rotvec[:, :66]).float().to(device), body_model, viewpoints=viewpoints, color="blue")
+        # imgs = utils_visu.anim_from_pose_data(torch.tensor(poses_rotvec[:, :66]).float().to(device), body_model, viewpoints=viewpoints, color="blue")
+        imgs = utils_visu.anim_from_pose_data(torch.tensor(poses_rotvec).float().to(device), body_model,
+                                              viewpoints=viewpoints, color="blue")
+
         for i, vp in enumerate(viewpoints):
             utils_visu.img2gif(imgs[i], f'out_temp/{name}/{name}_3D_Mesh.gif')
 
@@ -240,7 +251,7 @@ def transf(rotMat, theta_deg, values):
 
 def generate_text_HumanML3D(motion_id, motion_path, root_euler_path, start_frame=None, end_frame=None, motion_stats=False, ablations=[]):
     import argparse
-    from text2pose.config import POSESCRIPT_LOCATION
+    # from config import POSESCRIPT_LOCATION
 
     parser = argparse.ArgumentParser(description='Parameters for captioning.')
     parser.add_argument('--action', default="generate_captions", choices=("generate_captions", "motioncode_stats"),
@@ -456,7 +467,7 @@ def generate_text_HumanML3D(motion_id, motion_path, root_euler_path, start_frame
     if args.action == "generate_captions":
 
         pose_babel_text = False
-        args.add_babel_info = True
+        args.add_babel_info = False
         if args.add_babel_info:
 
             # get correspondences between tags and sentence parts
@@ -538,12 +549,12 @@ def generate_text_HumanML3D(motion_id, motion_path, root_euler_path, start_frame
 
 
 
-humanml3d_path = '..\\..\\..\\data\\HumanML3D'
+# humanml3d_path = '..\\..\\..\\data\\HumanML3D'
 
-ids_file = open(f'{humanml3d_path}\\all.txt', 'r')
+# ids_file = open(f'{humanml3d_path}\\all.txt', 'r')
 counter_line, counter_gen, len_array, problem_list = 0, 0, [], []
 generated_label = ''
-lines= ids_file.read().split('\n')
+# lines= ids_file.read().split('\n')
 
 # import os
 # word_counts = []
@@ -591,10 +602,10 @@ all_motion_stats = None
 # ['intensity', 'velocity', 'chronological']
 # ablation_list = ['intensity']
 
-for sample_index in tqdm.tqdm(range(0*len(lines)//5, 2*len(lines)//5 )):
-    line = lines[sample_index]
-    id = line.rstrip('\n')
-
+for sample_index in tqdm.tqdm(range(4)):
+    # line = lines[sample_index]
+    # id = line.rstrip('\n')
+    id = str(sample_index)
     print(f'ID ----> {id}')
 
 
@@ -605,10 +616,10 @@ for sample_index in tqdm.tqdm(range(0*len(lines)//5, 2*len(lines)//5 )):
     # # if counter > 5000: continue
 
     # Load paths
-    motion_path = f'{humanml3d_path}\\new_joint_vecs\\{id}.npy'
-    euler_oath = f'{humanml3d_path}\\new_joint_vecs\\{id}.npy'
-    org_caption = open(f'{humanml3d_path}\\texts\\{id}.txt', 'r', encoding='utf-8').read()
-
+    # motion_path = f'{humanml3d_path}\\new_joint_vecs\\{id}.npy'
+    # euler_oath = f'{humanml3d_path}\\new_joint_vecs\\{id}.npy'
+    # org_caption = open(f'{humanml3d_path}\\texts\\{id}.txt', 'r', encoding='utf-8').read()
+    # org_caption = "SFU Salsa dance"
     motion_path = 'M:\\Pair1_8_7_take1_1_subject-Pair1_8_7_follower_subject_stageii.npz'
 
 
@@ -640,8 +651,8 @@ for sample_index in tqdm.tqdm(range(0*len(lines)//5, 2*len(lines)//5 )):
     # print("id", id)
 
     if os.path.exists(save_path_text_sanity): continue
-    root_euler_path = f'{humanml3d_path}\\root_euler\\{id}.npy'
-
+    # root_euler_path = f'{humanml3d_path}\\root_euler\\{id}.npy'
+    root_euler_path = ""
     if True:
 
 
