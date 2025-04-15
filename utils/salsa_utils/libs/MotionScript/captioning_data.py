@@ -3059,7 +3059,7 @@ AUGMENTATION_PORTION = 1
 
 ablation = ['nothing for now']
 
-import captioning_data_ablation as cpd
+import MotionScript.captioning_data_ablation as cpd
 
 if 'intensity' in ablation:
     ENHANCE_TEXT_1CMPNT_Motion = cpd.ENHANCE_TEXT_1CMPNT_Motion__ABLATION_INTENSITY

@@ -1,12 +1,12 @@
 import numpy as np
 import os
 import torch
-from visualize_T2MGPT.joints2smpl.src import config
+from MotionScript.visualize_T2MGPT.joints2smpl.src import config
 import smplx
 import h5py
-from visualize_T2MGPT.joints2smpl.src.smplify import SMPLify3D
+from MotionScript.visualize_T2MGPT.joints2smpl.src.smplify import SMPLify3D
 from tqdm import tqdm
-import visualize_T2MGPT.rotation_conversions as geometry
+import MotionScript.visualize_T2MGPT.rotation_conversions as geometry
 import argparse
 
 

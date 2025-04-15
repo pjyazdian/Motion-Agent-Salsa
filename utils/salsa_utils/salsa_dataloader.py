@@ -147,21 +147,21 @@ class Audio_tokenizer:
         wav = convert_audio(sample_audio, sr, 24000, 1)
         return wav, 24000
 
-
-class MotionScript:
-
-    def __init__(self, args):
-
-    def normalize(self, input_audio, sr):
-
-    def tokenize(self, input_audio24k):
-
-
-
-
-    def normalize(self, sample_audio, sr):
-        wav = convert_audio(sample_audio, sr, 24000, 1)
-        return wav, 24000
+from MotionScript.captioning_motion_Salsa import MotionScript_Forward_Salsa
+# class MotionScript:
+#
+#     def __init__(self, args):
+#         self.nothing = None
+#     def normalize(self, input_audio, sr):
+#
+#     def tokenize(self, input_audio24k):
+#
+#
+#
+#
+#     def normalize(self, sample_audio, sr):
+#         wav = convert_audio(sample_audio, sr, 24000, 1)
+#         return wav, 24000
 
 
 
@@ -271,8 +271,8 @@ class DataPreprocessor:
         """
         clip_skeleton3d: np.ndarray = clip['keypoints3d']
         clip_rotmat: np.ndarray = clip['rotmat']
-
-
+        clip_raw_euler_poses = clip['raw_euler_poses']
+        clip_raw_trans = clip['raw_trans']
         clip_audio_raw, clip_audio_raw_sr = clip['audio_raw'], clip['audio_sr']
         clip_audio_raw, clip_audio_raw_sr = self.audio_tokenizer.normalize(torch.from_numpy(clip_audio_raw),
                                                                            clip_audio_raw_sr)
@@ -325,6 +325,12 @@ class DataPreprocessor:
             sample_HML3D_joints_vec =  clip_HM3D_joint_vec[start_idx:fin_idx]
             sample_vqtokens = self.motion_tokenizer.npy263_tokenizer(sample_HML3D_joints_vec)
             sample_vqtokens = sample_vqtokens.cpu().detach().numpy()
+
+            sample_raw_euler_poses = clip_raw_euler_poses[start_idx:fin_idx]
+            sample_raw_trans = clip_raw_trans[start_idx:fin_idx]
+            results = MotionScript_Forward_Salsa({'poses': sample_raw_euler_poses.copy(),
+                                                  '3d_keypoints': sample_skeletons3d,
+                                                  'trans': sample_raw_trans})
 
             subdivision_start_time = start_idx / self.skeleton_resampling_fps
             subdivision_end_time = fin_idx / self.skeleton_resampling_fps

@@ -17,24 +17,24 @@ from human_body_prior.body_model.body_model import BodyModel
 import numpy as np
 import sys
 
-from captioning_data import AUGMENTATION_LENGTH, AUGMENTATION_PORTION
+from MotionScript.captioning_data import AUGMENTATION_LENGTH, AUGMENTATION_PORTION
 
 # local_path = "/localhome/pjomeyaz/Payam_Files/Projects/Gestcription/posescript/src/"
 # sys.path.append(local_path)
 
 
 
-import ms_config as config
-import ms_utils as utils
-import ms_utils_visu as utils_visu
-import captioning as captioning_py
+import MotionScript.ms_config as config
+import MotionScript.ms_utils as utils
+import MotionScript.ms_utils_visu as utils_visu
+import MotionScript.captioning as captioning_py
 import warnings
 warnings.filterwarnings('ignore')
 import torch
 import nltk
 
 
-from MS_Algorithms import create_gif_with_blinking, merge_gifs_side_by_side
+from MotionScript.MS_Algorithms import create_gif_with_blinking, merge_gifs_side_by_side
 
 # get pose information
 # dataID_2_pose_info = utils.read_posescript_json("ids_2_dataset_sequence_and_frame_index.json")
@@ -443,7 +443,7 @@ def generate_text_HumanML3D(motion_id, motion_path, root_euler_path, start_frame
     #     plt.clf()
     # exit()
     # Calculate the differences between consecutive elements
-    if True:
+    if False:
         root_orient2print = root_euler_orient.cpu().numpy()
         for axis in [0, 1, 2]:
             plt.plot(root_orient2print[:, axis], label=f"Axis={axis}")
@@ -548,6 +548,313 @@ def generate_text_HumanML3D(motion_id, motion_path, root_euler_path, start_frame
 
 
 
+def MotionScript_Forward_Salsa(input_loaded, start_frame=None, end_frame=None, motion_stats=False, ablations=[]):
+    import argparse
+    # from config import POSESCRIPT_LOCATION
+
+    parser = argparse.ArgumentParser(description='Parameters for captioning.')
+    parser.add_argument('--action', default="generate_captions", choices=("generate_captions", "motioncode_stats"),
+                        help="Action to perform.")
+    parser.add_argument('--saving_dir', default='out_temp/captioning_motion' + "/generated_captions/",
+                        help='General location for saving generated captions and data related to them.')
+    parser.add_argument('--version_name', default="tmp",
+                        help='Name of the caption version. Will be used to create a subdirectory of --saving_dir.')
+    parser.add_argument('--simplified_captions', action='store_true',
+                        help='Produce a simplified version of the captions (basically: no aggregation, no omitting of some support keypoints for the sake of flow, no randomly referring to a body part by a substitute word).')
+    parser.add_argument('--apply_transrel_ripple_effect', action='store_true',
+                        help='Discard some posecodes using ripple effect rules based on transitive relations between body parts.')
+    parser.add_argument('--apply_stat_ripple_effect', action='store_true',
+                        help='Discard some posecodes using ripple effect rules based on statistically frequent pairs and triplets of posecodes.')
+    parser.add_argument('--random_skip', action='store_true', help='Randomly skip some non-essential posecodes.')
+    parser.add_argument('--add_babel_info', default=True, action='store_true',
+                        help='Add sentences using information extracted from BABEL.')
+    parser.add_argument('--add_dancing_info', action='store_true',
+                        help='Add a sentence stating that the pose is a dancing pose if it comes from DanceDB, provided that --add_babel_info is also set to True.')
+
+    args = parser.parse_args()
+
+    # create saving location
+    save_dir = os.path.join(args.saving_dir, args.version_name)
+    if not os.path.isdir(save_dir):
+        os.makedirs(save_dir)
+        print("Created new dir", save_dir)
+
+    # load and format joint coordinates for input (dict -> matrix)
+    # coords = torch.load(os.path.join(POSESCRIPT_LOCATION, "ids_2_coords_correct_orient_adapted.pt"))
+
+
+    # pose_info = dataID_2_pose_info[file_index]
+    # start_frame, end_frame = 0, 40  # 6 *
+
+    # Shay
+    # (FirstPerson_pose_seq_data, pose_seq_data,
+    #  root_rot_vec, trans, poses_rotvec) = utils.get_pose_sequence_data_from_file_Salsa_Dance(motion_path,
+    #                                                                                  root_euler_path,
+    #                                                                                  normalizer_frame=start_frame)
+    #
+    (FirstPerson_pose_seq_data, pose_seq_data,
+     root_rot_vec, trans, poses_rotvec) = utils.get_pose_sequence_data_from_file_Salsa_Dance_preloaded(
+                                    input_loaded)
+
+    fps = 20.0
+    # if len(pose_seq_data) < 40:
+    #     return '', '', 0.0, 0.0
+    SEQ_LENGTH = min(int(AUGMENTATION_LENGTH*fps), len(pose_seq_data))
+    if len(pose_seq_data) < fps/2:
+        return '', '', '', 0, 0
+    start_frame = random.randint(0, len(pose_seq_data)-SEQ_LENGTH)  # since both included
+    end_frame = start_frame + SEQ_LENGTH
+    # start_frame, end_frame = int(2.4*20),  int(4.3*20 ) # len(pose_seq_data) # int(6.5*20 )# len(pose_seq_data) X#1
+    start_frame, end_frame = 0, len(pose_seq_data)  # 40 # len(pose_seq_data) # For hamid
+
+    start_time, end_time = float(start_frame) / fps, float(end_frame) / fps
+    # XRZ
+    FirstPerson_pose_seq_data = FirstPerson_pose_seq_data.to(device)
+    pose_seq_data = pose_seq_data.to(device)
+    root_rot_vec = torch.tensor(root_rot_vec).to(device)
+    trans = torch.tensor(trans).to(device)
+
+
+    if len(root_rot_vec) != len(pose_seq_data):
+        root_rot_vec = root_rot_vec[:len(pose_seq_data)]
+    FirstPerson_pose_seq_data = FirstPerson_pose_seq_data[start_frame:end_frame]
+    pose_seq_data = pose_seq_data[start_frame:end_frame]
+    root_rot_vec = root_rot_vec[start_frame:end_frame]
+    trans = trans[start_frame:end_frame]
+
+
+    # pose_seq_data = pose_seq_data[:end_frame] #todo: REMOVE th
+    # pose_seq_data_shape = pose_seq_data.shape
+    # infer coordinates
+    # with torch.no_grad():
+    #     j_seq_3D_coord = body_model(pose_body=pose_seq_data[:, 3:66],
+    #                                 # pose_hand=pose_seq_data[:, 66:],
+    #                                 root_orient=pose_seq_data[:,:3]).Jtr  # U should decide about the root orentation that I want to use
+
+    FirstPerson_pose_seq_data = FirstPerson_pose_seq_data.reshape(pose_seq_data.shape[0], -1, 3)
+    pose_seq_data = pose_seq_data.reshape(pose_seq_data.shape[0], -1, 3)
+    # for frame_i in range(pose_seq_data.shape[0]):
+    #
+    #
+    #     trans_oriented  = torch.tensor(trans[frame_i]).unsqueeze(0).float().to(device)
+    #
+    #     pose_seq_data[frame_i] = transf(rotX, -180, pose_seq_data[frame_i])
+    #     trans_oriented = transf(rotX, -180, trans_oriented)
+    #     pose_seq_data[frame_i] += trans_oriented
+    #
+    # pose_seq_data = (pose_seq_data).reshape(pose_seq_data_shape)
+
+    # j_seq_3D_coord = pose_seq_data.view(pose_seq_data.shape[0], -1, 3)
+    # j_seq = j_seq_3D_coord.detach()
+    # # for frame_i in range(j_seq.shape[0]):
+    # #     j_seq[frame_i] = transf(rotX, -90, j_seq[frame_i])
+    j_seq = pose_seq_data
+    # "(Circular, 2260, 500, 700)"
+    # ________________________________________________
+    # 1.    coords [joints]
+
+    def normalize_coords(pose_seq_data_x, trans_x):
+        for frame in range(pose_seq_data_x.shape[0]):
+            for j_id in range(pose_seq_data_x.shape[1]):
+                pose_seq_data_x[frame, j_id] -= trans_x[frame]
+        return pose_seq_data_x
+
+    # coords = pose_seq_data
+    # # coords = normalize_coords(pose_seq_data, trans)
+    coords = FirstPerson_pose_seq_data
+
+
+
+    # 2. Virtual joints
+    # Adding two virtual joints {root_orientation and global_translation}
+    # 2.1    coords [orientation-->rotvec]
+    # rotvec_seq = pose_seq_data[start_frame: end_frame]
+
+    # Eroor: joint number zero is pelvis, not root orientation
+    # root_orient = pose_seq_data[start_frame:end_frame, 0, :3].clone()
+    # root_orient = root_rot_eular[start_frame:end_frame]
+    root_euler_orient = torch.zeros_like(root_rot_vec).to(device)
+    # deg2rad = lambda theta_deg: math.pi * theta_deg / 180.0
+    rad2deg = lambda theta_rad: 180.0 * theta_rad / math.pi
+
+
+    for frame in range(root_euler_orient.shape[0]):
+
+        # theta_x, theta_y, theta_z = root_orient[frame, [0, 1, 2]] # utils.rotvec_to_eulerangles(root_orient[frame, :].unsqueeze(0))
+
+        theta_x, theta_y, theta_z = utils.rotvec_to_eulerangles(root_rot_vec[frame, :].unsqueeze(0))
+        # root_orient[frame, :] = torch.cat((rad2deg(theta_x),
+        #                                    rad2deg(theta_y),
+        #                                    rad2deg(theta_z)))
+
+
+        root_euler_orient[frame, :] = torch.cat((  torch.unsqueeze(rad2deg(theta_x), 0),
+                                                   torch.unsqueeze(rad2deg(theta_y), 0),
+                                                   torch.unsqueeze(rad2deg(theta_z), 0))).squeeze()
+
+    # To adjust the orientation w.r.t. mirrored samples (swap left/right)
+    def adjust_mirroed_root_orientations(batch_orientations):
+        # Negate the yaw and roll for the mirrored pose
+        batch_orientations[:, 1] = -batch_orientations[:, 1]  # Roll
+        batch_orientations[:, 2] = -batch_orientations[:, 2]  # Yaw
+        return batch_orientations
+
+    # To normalize w.r.t. the first frame facing forwadd.
+    def normalize_angles(angles):
+        # Normalize angles to range [0, 360)
+        angles = angles % 360
+        # Shift angles > 180 to [-180, 180)
+        angles[angles > 180] -= 360
+        return angles
+
+    # if 'M' in motion_id:
+    #     root_euler_orient = adjust_mirroed_root_orientations(root_euler_orient)
+
+    angle_diff = root_euler_orient[0, 2]
+    root_euler_orient[:, 2] = normalize_angles((root_euler_orient[:, 2] - angle_diff))  # not sure if this is correct for negatives
+
+    # In order to be compatible with motionscript we add zeros for fingers
+    # Later, they would be ignored in the prepare_input() function
+    coords = torch.cat((coords, torch.zeros(coords.shape[0], 2*15, 3).to(coords.device)), dim=1)
+    coords = coords[:, :52,: ]
+
+    coords = torch.cat((coords, root_euler_orient.unsqueeze(1)), dim=1)
+
+
+    # 2.2    coords [translation]
+    # Todo: we should rotate translation with respect to the transformation we use
+    # trans = trans[start_frame:end_frame]
+    coords = torch.cat((coords, trans.unsqueeze(1)), dim=1)
+
+    check_coord = coords.cpu().detach().numpy()
+    # Check: _________________________________
+    # trans = np.zeros_like(trans)
+    # visualize_frames_HumanML3D(pose_seq_data, trans, [], motion_id, '', poses_rotvec)
+    # (pose_seq_data, trans, Motioncodes4vis, name, org_path)
+    # exit()
+
+    coords = coords.view(coords.shape[0], -1, 3)
+
+    toplot = coords.cpu().detach().numpy()
+    import matplotlib.pyplot as plt
+
+    # for j in [53]:
+    #     for axis in [0, 1, 2]:
+    #         plt.plot(coords.cpu().detach().numpy()[:,j, axis], label=f"Axis={axis}")
+    #     plt.title(f"Joint={captioning_py.swapped_JOINT_NAMES2ID[j]}")
+    #     plt.legend()
+    #     plt.show()
+    #     plt.clf()
+    # exit()
+    # Calculate the differences between consecutive elements
+    if False:
+        root_orient2print = root_euler_orient.cpu().numpy()
+        for axis in [0, 1, 2]:
+            plt.plot(root_orient2print[:, axis], label=f"Axis={axis}")
+        plt.title(f"Eular orientation")
+        plt.legend()
+        plt.show()
+        # plt.clf()
+
+        for axis in [0, 1, 2]:
+            plt.plot(trans[:, axis].cpu().numpy(), label=f"Axis={axis}")
+        plt.title(f"trans")
+        plt.legend()
+        plt.show()
+        plt.clf()
+        # exit()
+
+
+
+
+    args.action = "generate_captions" if motion_stats==False else "motioncode_stats"
+    if args.action == "generate_captions":
+
+        pose_babel_text = False
+        args.add_babel_info = False
+        if args.add_babel_info:
+
+            # get correspondences between tags and sentence parts
+            babel_tag2txt_filepath = f"{os.path.dirname(os.path.realpath(__file__))}/action_to_sent_template.json"
+            with open(babel_tag2txt_filepath, "r") as f:
+                babel_tag2txt = json.load(f)
+
+            # get a record of tags with no sentence correspondence
+            null_tags = set([tag for tag in babel_tag2txt if not babel_tag2txt[tag]])
+
+            # load and format babel labels for each motion w.r.t. to the selected time window
+            HML3D_babel_tags_filepath = os.path.join(config.POSESCRIPT_LOCATION, "babel_labels_for_motionscript.pkl")
+            # pose_babel_tags_filepath = os.path.join(POSESCRIPT_LOCATION, "babel_labels_for_posescript.pkl")
+            with open(HML3D_babel_tags_filepath, "rb") as f:
+                HML3D_BABEL = pickle.load(f)
+            '''
+            pose_babel_tags = [d[pid] for pid in pose_ids]
+
+            # # filter out useless tags, and format results to have a list of
+            # # action tags (which can be empty) for each pose
+            # for i, pbt in enumerate(pose_babel_tags):
+            #     if pbt is None or pbt == "__BMLhandball__":
+            #         pose_babel_tags[i] = []
+            #     elif pbt == "__DanceDB__":
+            #         pose_babel_tags[i] = ["dance"] if args.add_dancing_info else []
+            #     elif isinstance(pbt, list):
+            #         if len(pbt) == 0 or pbt[0][0] is None:
+            #             pose_babel_tags[i] = []
+            #         else:
+            #             # keep only action category labels
+            #             actions = []
+            #             for _, _, act_cat in pbt:
+            #                 actions += act_cat
+            #             pose_babel_tags[i] = list(set(actions).difference(null_tags))
+            #     else:
+            #         raise ValueError(str((i, pbt)))
+
+            # create a sentence from BABEL tags for each pose, if available
+            pose_babel_text = captioning_py.create_sentence_from_babel_tags(pose_babel_tags, babel_tag2txt)
+            '''
+            motion_babel_text, motion_babel_details = captioning_py.create_sentence_from_babel_to_hml3d(HML3D_BABEL, babel_tag2txt,
+                                                                                  motion_id,
+                                                                                  start_time,
+                                                                                  end_time,
+                                                                                  GPT_Template='BABEL') # GPT_Template='GPT')
+
+        # process
+        else:
+            motion_babel_text, motion_babel_details = '', ''
+
+        Ablation_No_motionScript = False
+        if Ablation_No_motionScript:
+            binning_detial, motioncodes4vis, motion_descriptions_non_agg, motion_description = '', [''], ['']
+        else:
+            binning_detial, motioncodes4vis, motion_descriptions_non_agg, motion_description = captioning_py.main(coords,
+                                                                    save_dir=save_dir,
+                                                                    babel_info=pose_babel_text,
+                                                                    simplified_captions=args.simplified_captions,
+                                                                    apply_transrel_ripple_effect=args.apply_transrel_ripple_effect,
+                                                                    apply_stat_ripple_effect=args.apply_stat_ripple_effect,
+                                                                    random_skip=args.random_skip,
+                                                                    motion_tracking=True, ablations=ablations)
+            # Shay
+            motion_id = 'test_inside'
+            motion_path = 'm_path'
+            visualize_frames_SFU_SALSA(pose_seq_data, trans, motioncodes4vis, motion_id, motion_path, poses_rotvec)
+        if ' '.join(motion_description).strip() == '':
+            binning_detial, motion_descriptions_non_agg, motion_description = '', [''], ['']
+        else:
+            motion_descriptions_non_agg = [motion_babel_text.strip()] + motion_descriptions_non_agg
+            motion_description = [motion_babel_text.strip()] + motion_description
+        return ((binning_detial + str(2*"\n") + str(10*" ") + " BABEL Captions:\n\n *W.R.T. HumanML3D frames from AMASS\n" + motion_babel_details),
+                " ".join([x for x in motion_descriptions_non_agg if x!='']),
+                " ".join([x for x in motion_description if x!='']),
+                start_time, end_time)
+
+    if args.action == 'motioncode_stats':
+        # captioning_py.motioncode_stat_analysis(coords, save_dir)
+        return captioning_py.motioncode_stat_analysis_step1_extraction(coords, save_dir)
+
+
+
+
 
 # humanml3d_path = '..\\..\\..\\data\\HumanML3D'
 
@@ -601,7 +908,7 @@ all_motion_stats = None
 
 # ['intensity', 'velocity', 'chronological']
 # ablation_list = ['intensity']
-
+'''
 for sample_index in tqdm.tqdm(range(4)):
     # line = lines[sample_index]
     # id = line.rstrip('\n')
@@ -760,3 +1067,4 @@ mean = np.mean(len_array)
 std_dev = np.std(len_array)
 print('Mean:', mean)
 print('Standard Deviation:', std_dev)
+'''

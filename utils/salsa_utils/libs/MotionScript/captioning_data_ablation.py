@@ -1,4 +1,4 @@
-from captioning_data import *
+from MotionScript.captioning_data import *
 ENHANCE_TEXT_1CMPNT_Motion__ABLATION_INTENSITY = {
     # ---------------------------------------------
     # Angular

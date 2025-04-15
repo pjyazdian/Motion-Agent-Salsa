@@ -12,7 +12,7 @@ from customloss import (camera_fitting_loss,
                         body_fitting_loss_3d, 
                         )
 from prior import MaxMixturePrior
-from visualize_T2MGPT.joints2smpl.src import config
+from MotionScript.visualize_T2MGPT.joints2smpl.src import config
 
 
 

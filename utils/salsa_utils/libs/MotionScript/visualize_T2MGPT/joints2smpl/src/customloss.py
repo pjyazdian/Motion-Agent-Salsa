@@ -1,6 +1,6 @@
 import torch
 import torch.nn.functional as F
-from visualize_T2MGPT.joints2smpl.src import config
+from MotionScript.visualize_T2MGPT.joints2smpl.src import config
 
 # Guassian
 def gmof(x, sigma):

@@ -279,7 +279,7 @@ def eulerangles_to_rotvec(thetax, thetay, thetaz):
 import os
 import numpy as np
 
-import ms_config as config
+import MotionScript.ms_config as config
 
 
 def read_posescript_json(relative_filepath):
@@ -314,11 +314,11 @@ def get_pose_data_from_file(pose_info):
 
 
 rotX = lambda theta: torch.tensor(
-            [[1, 0, 0], [0, torch.cos(theta), -torch.sin(theta)], [0, torch.sin(theta), torch.cos(theta)]])
+            [[1, 0, 0], [0, torch.cos(theta), -torch.sin(theta)], [0, torch.sin(theta), torch.cos(theta)]]).to(torch.float64)
 rotY = lambda theta: torch.tensor(
-            [[torch.cos(theta), 0, torch.sin(theta)], [0, 1, 0], [-torch.sin(theta), 0, torch.cos(theta)]])
+            [[torch.cos(theta), 0, torch.sin(theta)], [0, 1, 0], [-torch.sin(theta), 0, torch.cos(theta)]]).to(torch.float64)
 rotZ = lambda theta: torch.tensor(
-            [[torch.cos(theta), -torch.sin(theta), 0], [torch.sin(theta), torch.cos(theta), 0], [0, 0, 1]])
+            [[torch.cos(theta), -torch.sin(theta), 0], [torch.sin(theta), torch.cos(theta), 0], [0, 0, 1]]).to(torch.float64)
 
 def transf(rotMat, theta_deg, values):
     theta_rad = math.pi * torch.tensor(theta_deg).float() / 180.0
@@ -1500,7 +1500,7 @@ def get_pose_sequence_data_from_file_Salsa_Dance(npyfile_address, npy_file_euler
         #     batch_size=len(data['betas']), num_betas=10, use_pca=False, use_face_contour=True, flat_hand_mean=True)
         frames = data['poses'].shape[0]
         b = np.repeat(data['betas'][:10], frames).reshape((frames, 10))
-        smplx = SMPLX(model_path='..\\..\\SMPLX_DEP\\models_lockedhead\\smplx', betas=b,
+        smplx = SMPLX(model_path='Motion-Agent-Salsa\\utils\\salsa_utils\\SMPLX_DEP\\models_lockedhead\\smplx', betas=b,
                       gender=np.array2string(data['gender'])[1:-1], \
                       batch_size=len(b), num_betas=10, use_pca=False, use_face_contour=True, flat_hand_mean=True)
 
@@ -1560,6 +1560,107 @@ def get_pose_sequence_data_from_file_Salsa_Dance(npyfile_address, npy_file_euler
     FirstPerson_xyz = FirstPerson_pred_xyz.reshape(FirstPerson_pred_xyz.shape[0], -1)
 
     return FirstPerson_xyz, xyz, euler_angles, r_pos, poses_rotvec4mesh
+
+
+def get_pose_sequence_data_from_file_Salsa_Dance_preloaded(preloaded, normalizer_frame=None):
+    # Shay
+    loaded = preloaded # dict(np.load(npyfile_address, allow_pickle=True))
+    # We need to resample to 20-FPS since the motionscript was originally
+    # developed with that and other FPS affects thresholds, velocity, timing, etc.
+    # limit_frames = 200
+    # loaded['poses'] = loaded['poses'][:limit_frames]
+    # loaded['trans'] = loaded['trans'][:limit_frames]
+    #
+    # pose_seq = loaded['poses']
+    # pose_seq_20fps = interp1d(np.linspace(0, len(loaded['poses']) - 1, len(loaded['poses'])), loaded['poses'], axis=0)(
+    #     np.linspace(0, len(loaded['poses']) - 1, int(len(loaded['poses']) * 20 / 30)))
+    # trans_20fps = interp1d(np.linspace(0, len(loaded['trans']) - 1, len(loaded['trans'])), loaded['trans'], axis=0)(
+    #     np.linspace(0, len(loaded['trans']) - 1, int(len(loaded['trans']) * 20 / 30)))
+    # loaded['poses'] = pose_seq_20fps
+    # loaded['trans'] = trans_20fps
+    #
+    # poses_rotvec4mesh = loaded['poses'][:, :66].copy()
+    poses_rotvec4mesh = loaded['poses'] # [:, :66].copy()
+    # # for fr_i in range(loaded['poses'].shape[0]):
+    # #     loaded['poses'][fr_i, :3] = (R.from_rotvec(loaded['poses'][fr_i, :3]) * R.from_euler('x', -90, degrees=True)).as_rotvec()
+    # #     # loaded['poses'][fr_i, :3] = (R.from_rotvec(loaded['poses'][fr_i, :3]) * R.from_euler('y', -90, degrees=True)).as_rotvec()
+    # # loaded['trans'] = transf(rotX, -90, torch.tensor(loaded['trans']).float()).cpu().detach().numpy()
+    # # Todo: do the same for the translation
+    #
+    # device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
+    #
+    # from smplx import SMPLX
+    # def smplx_to_pos3d_SFU(data):
+    #     smplx = None
+    #
+    #     # smplx = SMPLX(model_path='/localhome/cza152/Desktop/Duolando/smplx/models/smplx',
+    #     #                betas=data['betas'][:, :10], gender=data['meta']['gender'], \
+    #     #     batch_size=len(data['betas']), num_betas=10, use_pca=False, use_face_contour=True, flat_hand_mean=True)
+    #     frames = data['poses'].shape[0]
+    #     b = np.repeat(data['betas'][:10], frames).reshape((frames, 10))
+    #     smplx = SMPLX(model_path='..\\..\\SMPLX_DEP\\models_lockedhead\\smplx', betas=b,
+    #                   gender=np.array2string(data['gender'])[1:-1], \
+    #                   batch_size=len(b), num_betas=10, use_pca=False, use_face_contour=True, flat_hand_mean=True)
+    #
+    #     keypoints3d = smplx.forward(
+    #         # global_orient=torch.from_numpy(data['global_orient']).float(),
+    #
+    #         global_orient=torch.from_numpy(data['poses'][:, :3], ).float(),
+    #         body_pose=torch.from_numpy(data['poses'][:, 3:66]).float(),
+    #         jaw_pose=torch.from_numpy(data['poses'][:, 66:69]).float(),
+    #         leye_pose=torch.from_numpy(data['poses'][:, 69:72]).float(),
+    #         reye_pose=torch.from_numpy(data['poses'][:, 72:75]).float(),
+    #         left_hand_pose=torch.from_numpy(data['poses'][:, 75:120]).float(),
+    #         right_hand_pose=torch.from_numpy(data['poses'][:, 120:]).float(),
+    #         transl=torch.from_numpy(data['trans']).float(),  # transl=torch.from_numpy(data['transl']).float(),
+    #         # betas=torch.from_numpy(data['betas'][:10]).float()
+    #         betas=torch.from_numpy(b).float()
+    #     ).joints.detach().numpy()[:, :55]
+    #
+    #     nframes = keypoints3d.shape[0]
+    #     return keypoints3d
+    # pose_seq_data = smplx_to_pos3d_SFU(loaded)
+    #
+    pose_seq_data = loaded['3d_keypoints']
+    j_seq = torch.tensor(pose_seq_data)
+
+    # # Not required:
+    for frame_i in range(j_seq.shape[0]):
+        j_seq[frame_i] = transf(rotX, -90, j_seq[frame_i])
+    # j_seq = pose_seq_data.detach().cpu().numpy()
+
+    motions = j_seq
+    # motion_batchified = np.expand_dims(motions, axis=0)
+    # title, name = ["Test"], 'ABBAS'
+    # motion_batchified = torch.unsqueeze(motions, 0)
+    # utils_visu.draw_to_batch_Payam(motion_batchified, title, [f'out_temp/{name}_3DS.gif'])
+
+
+    # motions = loaded['poses']
+    # motions = motions[:, :21*3+3].reshape((-1, 22, 3))
+
+    # quickly rotagte just the root orientation
+    for fr_i in range(loaded['poses'].shape[0]):
+        rotation_fix = R.from_euler('x', -90, degrees=True)
+        loaded['poses'][fr_i, :3] = (R.from_rotvec(loaded['poses'][fr_i, :3]) * rotation_fix).as_rotvec()
+    global_orientation = loaded['poses'][:, :3].reshape((-1, 3))
+
+    motion_tensor = torch.tensor(motions)
+    global_orientation = torch.from_numpy(global_orientation)
+    euler_angles = global_orientation
+
+
+    FirstPerson_pred_xyz, pred_xyz = motion_tensor, motion_tensor
+    r_rot_quat, r_pos, euler_angles_from_quat = None, torch.tensor(loaded['trans']), None
+
+
+
+
+    xyz = pred_xyz.reshape(pred_xyz.shape[0], -1)
+    FirstPerson_xyz = FirstPerson_pred_xyz.reshape(FirstPerson_pred_xyz.shape[0], -1)
+
+    return FirstPerson_xyz, xyz, euler_angles, r_pos, poses_rotvec4mesh
+
 
 
 def get_pose_sequence_data_from_file_MOTIONX(npyfile_address, normalizer_frame=None):

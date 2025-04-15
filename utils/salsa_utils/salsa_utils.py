@@ -121,7 +121,7 @@ def read_all_salsa(base_path):
     if not os.path.exists(out_path):
         os.makedirs(out_path)
 
-    map_size = 1024 * 10  # in MB
+    map_size = 1024 * 12  # in MB
     map_size <<= 20  # in B
     db = [lmdb.open(os.path.join(out_path, 'lmdb_train'), map_size=map_size),
           lmdb.open(os.path.join(out_path, 'lmdb_test'), map_size=map_size)]
@@ -162,7 +162,7 @@ def read_all_salsa(base_path):
         if not os.path.exists(rotmat_folder):
             os.mkdir(rotmat_folder)
         for takes_folder in os.listdir(smplx_folder):
-            # if v_i > 2 : break
+            if v_i > 2 : break
             for file in os.scandir(os.path.join(smplx_folder, takes_folder)):
                 if not file.name.endswith('.npz'): continue
                 # if "Pair2" not in file.name: continue
@@ -174,10 +174,10 @@ def read_all_salsa(base_path):
                 audio_y, audio_sr = audio_from_mp4(mp4_path, audio_path)
 
 
-                data = np.load(file.path, allow_pickle=True)
+                loaded = np.load(file.path, allow_pickle=True)
                 # Todo: HumanML3D/ raw_pose_processing.ipynb --> Done!
-                keypoints3d = salsa_smplx_to_pos3d(data)
-                rotmat = salsa_smplx_to_rotmat(data)
+                keypoints3d = salsa_smplx_to_pos3d(loaded)
+                rotmat = salsa_smplx_to_rotmat(loaded)
                 # HumanML3D Representation
                 (data, ground_positions,
                  positions, l_velocity) = HM3D_F.process_file(keypoints3d,
@@ -220,7 +220,9 @@ def read_all_salsa(base_path):
                 # save subtitles and skeletons
                 poses = np.asarray(rotmat, dtype=np.float16)
                 clips[dataset_idx]['clips'].append(
-                    {'keypoints3d': keypoints3d,
+                    {'raw_euler_poses': loaded['poses'],
+                     'raw_trans': loaded['trans'],
+                     'keypoints3d': keypoints3d,
                      'rotmat': rotmat,
                      'HML3D_joints': HML3D_New_Joints,
                      'HML3D_joints_vec': HML3D_New_Joints_Vec,

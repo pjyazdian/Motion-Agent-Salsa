@@ -21,7 +21,7 @@ import mpl_toolkits.mplot3d.axes3d as p3
 import numpy as np
 import io
 import imageio
-import ms_utils as utils
+import MotionScript.ms_utils as utils
 
 print("Simply reruning the app (hamburger menu > 'Rerun') may be enough to get rid of a potential 'GLError'.")
 
@@ -544,8 +544,8 @@ import trimesh
 from pyrender.constants import RenderFlags
 
 
-from visualize_T2MGPT.simplify_loc2rot import joints2smpl
-from visualize_T2MGPT.rotation2xyz import Rotation2xyz
+from MotionScript.visualize_T2MGPT.simplify_loc2rot import joints2smpl
+from MotionScript.visualize_T2MGPT.rotation2xyz import Rotation2xyz
 from shapely import geometry
 from trimesh import Trimesh
 
