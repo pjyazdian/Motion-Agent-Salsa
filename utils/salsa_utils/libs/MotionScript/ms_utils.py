@@ -1623,11 +1623,18 @@ def get_pose_sequence_data_from_file_Salsa_Dance_preloaded(preloaded, normalizer
     #
     pose_seq_data = loaded['3d_keypoints']
     j_seq = torch.tensor(pose_seq_data)
-
+    adjusted_trans = torch.from_numpy(loaded['trans'])
     # # Not required:
     for frame_i in range(j_seq.shape[0]):
         j_seq[frame_i] = transf(rotX, -90, j_seq[frame_i])
-    # j_seq = pose_seq_data.detach().cpu().numpy()
+        adjusted_trans[frame_i] = transf(rotX, -90, adjusted_trans[frame_i].unsqueeze(0)).squeeze()
+    #
+        # j_seq[frame_i] = transf(rotY, 180, j_seq[frame_i])
+        # adjusted_trans[frame_i] = transf(rotY, 180, adjusted_trans[frame_i].unsqueeze(0)).squeeze()
+
+    j_seq = j_seq.detach().cpu().numpy()
+    loaded['trans'] = adjusted_trans.detach().cpu().numpy()
+    # j_seq = loaded['3d_keypoints'] # pose_seq_data.detach().cpu().numpy()
 
     motions = j_seq
     # motion_batchified = np.expand_dims(motions, axis=0)
@@ -1639,12 +1646,14 @@ def get_pose_sequence_data_from_file_Salsa_Dance_preloaded(preloaded, normalizer
     # motions = loaded['poses']
     # motions = motions[:, :21*3+3].reshape((-1, 22, 3))
 
-    # quickly rotagte just the root orientation
-    for fr_i in range(loaded['poses'].shape[0]):
-        rotation_fix = R.from_euler('x', -90, degrees=True)
-        loaded['poses'][fr_i, :3] = (R.from_rotvec(loaded['poses'][fr_i, :3]) * rotation_fix).as_rotvec()
+    # quickly rotate just the root orientation for the exchanged pitch, roll, yaw
+    # for fr_i in range(loaded['poses'].shape[0]):
+    #     rotation_fix = R.from_euler('X', -90, degrees=True)
+    #     loaded['poses'][fr_i, :3] = (R.from_rotvec(loaded['poses'][fr_i, :3]) * rotation_fix).as_rotvec()
     global_orientation = loaded['poses'][:, :3].reshape((-1, 3))
 
+
+    # poses_rotvec4mesh = loaded['poses']
     motion_tensor = torch.tensor(motions)
     global_orientation = torch.from_numpy(global_orientation)
     euler_angles = global_orientation

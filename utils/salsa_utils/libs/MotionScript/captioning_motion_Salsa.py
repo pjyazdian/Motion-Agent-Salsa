@@ -35,7 +35,8 @@ import nltk
 
 
 from MotionScript.MS_Algorithms import create_gif_with_blinking, merge_gifs_side_by_side
-
+from tqdm import tqdm
+from MotionScript.stmc_renderer.humor import HumorRenderer
 # get pose information
 # dataID_2_pose_info = utils.read_posescript_json("ids_2_dataset_sequence_and_frame_index.json")
 
@@ -170,9 +171,11 @@ def visualize_frames(pose_seq_data, trans, name):
         # motion_batchified = torch.unsqueeze(motions, 0)
         utils_visu.draw_to_batch_Payam(motion_batchified, title, [f'out_temp/{name}_3DS.gif'])
 
+
+
 # Shay
-def visualize_frames_SFU_SALSA(pose_seq_data, trans, Motioncodes4vis, name, org_path, poses_rotvec):
-    Mesh3D, Skeleton3D, Motioncodes, Merge, Dump_motioncodes = False, True, True, True, True
+def visualize_frames_SFU_SALSA(pose_seq_data, trans, Motioncodes4vis, name, org_path, poses_rotvec, body_params):
+    Mesh3D, Skeleton3D, Motioncodes, Merge, Dump_motioncodes = True, True, True, True, True
     if Dump_motioncodes:
         pickle.dump(Motioncodes4vis, open(f'out_temp/{name}/{name}_Motioncodes.mc', 'wb'))
     pose_seq_data =pose_seq_data.view(pose_seq_data.shape[0], -1)
@@ -187,6 +190,22 @@ def visualize_frames_SFU_SALSA(pose_seq_data, trans, Motioncodes4vis, name, org_
 
         for i, vp in enumerate(viewpoints):
             utils_visu.img2gif(imgs[i], f'out_temp/{name}/{name}_3D_Mesh.gif')
+
+
+
+        #Todo: draw using STMC
+        # Redner animation
+        smpl_renderer = HumorRenderer(20, imw=720, imh=720)
+        vert = body_params['vertices'].copy()
+        faces = body_params['faces']
+        smpl_renderer(vert, faces,
+                        output=f'out_temp/{name}/{name}_3D_Mesh.mp4',  # 'smpl_video_path.mp4',
+                        progress_bar=tqdm)
+
+
+
+
+
 
     # 3D Skeleton Visualization
     if Skeleton3D:
@@ -238,7 +257,7 @@ def visualize_frames_SFU_SALSA(pose_seq_data, trans, Motioncodes4vis, name, org_
     if Motioncodes:
         create_gif_with_blinking(Motioncodes4vis, total_frames=trans.shape[0], outname=f'out_temp/{name}/{name}_Motioncodes.gif')
     if Merge:
-        merge_gifs_side_by_side(f'out_temp/{name}/{name}_3DS.gif',
+        merge_gifs_side_by_side(f'out_temp/{name}/{name}_3D_Mesh.gif',
                                 f'out_temp/{name}/{name}_Motioncodes.gif',
                                 f'out_temp/{name}/{name}_Merged.gif')
 
@@ -548,7 +567,7 @@ def generate_text_HumanML3D(motion_id, motion_path, root_euler_path, start_frame
 
 
 
-def MotionScript_Forward_Salsa(input_loaded, start_frame=None, end_frame=None, motion_stats=False, ablations=[]):
+def MotionScript_Forward_Salsa(input_loaded, motion_id, motion_stats=False, ablations=[]):
     import argparse
     # from config import POSESCRIPT_LOCATION
 
@@ -621,7 +640,7 @@ def MotionScript_Forward_Salsa(input_loaded, start_frame=None, end_frame=None, m
     pose_seq_data = pose_seq_data[start_frame:end_frame]
     root_rot_vec = root_rot_vec[start_frame:end_frame]
     trans = trans[start_frame:end_frame]
-
+    root_euler_orient = root_rot_vec
 
     # pose_seq_data = pose_seq_data[:end_frame] #todo: REMOVE th
     # pose_seq_data_shape = pose_seq_data.shape
@@ -639,7 +658,7 @@ def MotionScript_Forward_Salsa(input_loaded, start_frame=None, end_frame=None, m
     #     trans_oriented  = torch.tensor(trans[frame_i]).unsqueeze(0).float().to(device)
     #
     #     pose_seq_data[frame_i] = transf(rotX, -180, pose_seq_data[frame_i])
-    #     trans_oriented = transf(rotX, -180, trans_oriented)
+    #     trans_oriented = qtransf(rotX, -180, trans_oriented)
     #     pose_seq_data[frame_i] += trans_oriented
     #
     # pose_seq_data = (pose_seq_data).reshape(pose_seq_data_shape)
@@ -673,11 +692,11 @@ def MotionScript_Forward_Salsa(input_loaded, start_frame=None, end_frame=None, m
     # Eroor: joint number zero is pelvis, not root orientation
     # root_orient = pose_seq_data[start_frame:end_frame, 0, :3].clone()
     # root_orient = root_rot_eular[start_frame:end_frame]
-    root_euler_orient = torch.zeros_like(root_rot_vec).to(device)
+    # root_euler_orient = torch.zeros_like(root_rot_vec).to(device)
     # deg2rad = lambda theta_deg: math.pi * theta_deg / 180.0
     rad2deg = lambda theta_rad: 180.0 * theta_rad / math.pi
 
-
+    '''
     for frame in range(root_euler_orient.shape[0]):
 
         # theta_x, theta_y, theta_z = root_orient[frame, [0, 1, 2]] # utils.rotvec_to_eulerangles(root_orient[frame, :].unsqueeze(0))
@@ -691,7 +710,7 @@ def MotionScript_Forward_Salsa(input_loaded, start_frame=None, end_frame=None, m
         root_euler_orient[frame, :] = torch.cat((  torch.unsqueeze(rad2deg(theta_x), 0),
                                                    torch.unsqueeze(rad2deg(theta_y), 0),
                                                    torch.unsqueeze(rad2deg(theta_z), 0))).squeeze()
-
+    '''
     # To adjust the orientation w.r.t. mirrored samples (swap left/right)
     def adjust_mirroed_root_orientations(batch_orientations):
         # Negate the yaw and roll for the mirrored pose
@@ -710,8 +729,10 @@ def MotionScript_Forward_Salsa(input_loaded, start_frame=None, end_frame=None, m
     # if 'M' in motion_id:
     #     root_euler_orient = adjust_mirroed_root_orientations(root_euler_orient)
 
+    '''
     angle_diff = root_euler_orient[0, 2]
     root_euler_orient[:, 2] = normalize_angles((root_euler_orient[:, 2] - angle_diff))  # not sure if this is correct for negatives
+    '''
 
     # In order to be compatible with motionscript we add zeros for fingers
     # Later, they would be ignored in the prepare_input() function
@@ -747,7 +768,7 @@ def MotionScript_Forward_Salsa(input_loaded, start_frame=None, end_frame=None, m
     #     plt.clf()
     # exit()
     # Calculate the differences between consecutive elements
-    if False:
+    if True:
         root_orient2print = root_euler_orient.cpu().numpy()
         for axis in [0, 1, 2]:
             plt.plot(root_orient2print[:, axis], label=f"Axis={axis}")
@@ -835,9 +856,15 @@ def MotionScript_Forward_Salsa(input_loaded, start_frame=None, end_frame=None, m
                                                                     random_skip=args.random_skip,
                                                                     motion_tracking=True, ablations=ablations)
             # Shay
-            motion_id = 'test_inside'
+
             motion_path = 'm_path'
-            visualize_frames_SFU_SALSA(pose_seq_data, trans, motioncodes4vis, motion_id, motion_path, poses_rotvec)
+            save_dir = f'out_temp/{motion_id}'
+            if not os.path.isdir(save_dir):
+                os.makedirs(save_dir)
+            body_params = {'vertices': input_loaded['body_vertices'],
+                           'faces': input_loaded['body_faces']}
+            visualize_frames_SFU_SALSA(pose_seq_data, trans, motioncodes4vis, motion_id, motion_path, poses_rotvec, body_params)
+
         if ' '.join(motion_description).strip() == '':
             binning_detial, motion_descriptions_non_agg, motion_description = '', [''], ['']
         else:

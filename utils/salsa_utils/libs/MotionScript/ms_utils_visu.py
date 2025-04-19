@@ -101,7 +101,7 @@ def anim_from_pose_data(pose_data, body_model, viewpoints=[[]], color='grey'):
             body_out = body_model(pose_body=pose_data[:,3:66],
                                   pose_hand=pose_data[:,75:],
                                   root_orient=pose_data[:,:3])
-        elif pose_data.shape[1]<=66: # For H9umanML3D dataset
+        elif pose_data.shape[1]<=66: # For HumanML3D dataset
             body_out = body_model(pose_body=pose_data[:,3:66],
                                   root_orient=pose_data[:,:3])
             body_out = body_model(pose_body=pose_data[:, 3:66],
@@ -132,8 +132,9 @@ def img2gif(image_list, output_gif_path):
 
     # Save the images as a GIF animation
     # output_gif_path = 'output_animation.gif'
-    imageio.mimsave(output_gif_path, pil_images, duration=0.05)
 
+    # imageio.mimsave(output_gif_path, pil_images, duration=0.05)
+    imageio.mimsave(output_gif_path, pil_images, duration=0.1, loop=0)
 
 
 def plot_3d_motion_Payam(args, figsize=(10, 10), fps=120, radius=4):
@@ -152,7 +153,7 @@ def plot_3d_motion_Payam(args, figsize=(10, 10), fps=120, radius=4):
                                                                   [9, 13, 16, 18, 20]]
 
 
-    limits = 1000 if nb_joints == 21 else 2
+    limits = 1000 if nb_joints == 21 else 1
     MINS = data.min(axis=0).min(axis=0)
     MAXS = data.max(axis=0).max(axis=0)
     colors = ['red', 'blue', 'black', 'red', 'blue',
@@ -222,6 +223,9 @@ def plot_3d_motion_Payam(args, figsize=(10, 10), fps=120, radius=4):
 
 
         ax.view_init(elev=110, azim=-90)
+        ax.quiver(0, 0, 0, 0.6, 0, 0, color='r')  # X axis
+        ax.quiver(0, 0, 0, 0, 0.6, 0, color='g')  # Y axis
+        ax.quiver(0, 0, 0, 0, 0, 0.5, color='b')  # Z axis
         ax.dist = 7.5
         #         ax =
         plot_xzPlane(MINS[0] - trajec[index, 0],
@@ -470,7 +474,7 @@ def draw_to_batch_Payam( smpl_joints_batch, title_batch=None, outname=None):
     for i in range(batch_size):
         out.append(plot_3d_motion_Payam([smpl_joints_batch[i], None, title_batch[i] if title_batch is not None else None]))
         if outname is not None:
-            imageio.mimsave(outname[i], np.array(out[-1]) ) # , fps=20)
+            imageio.mimsave(outname[i], np.array(out[-1]), loop=0 ) # , fps=20)
     out = torch.stack(out, axis=0)
     return out
 

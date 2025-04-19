@@ -280,6 +280,10 @@ class DataPreprocessor:
         # clip_word_list: list[list] = clip['words']
         clip_HM3D_joint_vec = clip['HML3D_joints_vec']
 
+        clipt_body_betas = clip['body_betas']
+        clip_body_vertices = clip['body_vertices']
+        clip_body_faces = clip['body_faces']
+
         # divide
         aux_info = []
         # sample_skeletons_list = []
@@ -328,9 +332,45 @@ class DataPreprocessor:
 
             sample_raw_euler_poses = clip_raw_euler_poses[start_idx:fin_idx]
             sample_raw_trans = clip_raw_trans[start_idx:fin_idx]
-            results = MotionScript_Forward_Salsa({'poses': sample_raw_euler_poses.copy(),
-                                                  '3d_keypoints': sample_skeletons3d,
-                                                  'trans': sample_raw_trans})
+
+            sample_body_betas = clipt_body_betas
+            sample_body_vertices = clip_body_vertices[start_idx:fin_idx]
+            sample_body_faces = clip_body_faces
+
+            # from MotionScript.stmc_renderer.humor import HumorRenderer
+            # smpl_renderer = HumorRenderer(20, imw=720, imh=720)
+            # from smplx import SMPLX
+            # smplx = SMPLX(model_path='utils\\salsa_utils\\SMPLX_DEP\\models_lockedhead\\smplx',
+            #               gender="NEUTRAL",
+            #               num_betas=16, use_pca=False, use_face_contour=True, flat_hand_mean=True)
+            #
+            # data = {'poses':  sample_raw_euler_poses}
+            # data['trans'] = sample_raw_trans
+            # itself = smplx.forward(
+            #     # global_orient=torch.from_numpy(data['global_orient']).float(),
+            #
+            #     global_orient=torch.from_numpy(data['poses'][:, :3], ).float(),
+            #     body_pose=torch.from_numpy(data['poses'][:, 3:66]).float(),
+            #
+            #     transl=torch.from_numpy(data['trans']).float()
+            # )
+            # smpl_renderer(
+            #     sample_HML3D_joints_vec.copy(),
+            #     output='smpl_video_path.mp4',
+            #     progress_bar=tqdm,
+            # )
+
+
+            input2MotionScript = {
+                                'poses': sample_raw_euler_poses[100:140].copy(),
+                                '3d_keypoints': sample_skeletons3d[100:140],
+                                'trans': sample_raw_trans[100:140],
+                                'body_betas': sample_body_betas,
+                                'body_vertices':  sample_body_vertices[100:140],
+                                'body_faces': sample_body_faces
+                                }
+            results = MotionScript_Forward_Salsa(input2MotionScript,
+                                                motion_id=f'Win_{i}')
 
             subdivision_start_time = start_idx / self.skeleton_resampling_fps
             subdivision_end_time = fin_idx / self.skeleton_resampling_fps

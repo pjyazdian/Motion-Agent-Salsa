@@ -1,3 +1,4 @@
+import imageio
 import tqdm
 
 
@@ -2084,16 +2085,25 @@ def create_gif_with_blinking(motioncodes, total_frames, outname):
 from PIL import Image, ImageSequence
 def merge_gifs_side_by_side(gif1_path, gif2_path, output_path, default_duration=100):
     # Open the GIFs
-    gif1 = Image.open(gif1_path)
-    gif2 = Image.open(gif2_path)
+    if 'mp4' in gif1_path:
+        vid = imageio.get_reader(gif1_path, 'ffmpeg')
+        gif1 = []
+        for frame in vid:
+            pil_frame = Image.fromarray(frame)
+            gif1.append(pil_frame)
+        frames_gif1 = gif1
+    else:
+        gif1 = Image.open(gif1_path)
+        frames_gif1 = [frame.copy() for frame in ImageSequence.Iterator(gif1)]
 
-    # Check if both GIFs have the same number of frames
-    frames_gif1 = [frame.copy() for frame in ImageSequence.Iterator(gif1)]
+    gif2 = Image.open(gif2_path)
     frames_gif2 = [frame.copy() for frame in ImageSequence.Iterator(gif2)]
 
-    if len(frames_gif1) != len(frames_gif2):
-        raise ValueError("GIFs do not have the same number of frames")
 
+    # Check if both GIFs have the same number of frames
+    if len(frames_gif1) != len(frames_gif2):
+        # raise ValueError("GIFs do not have the same number of frames")
+        gif1 = gif1[:len(frames_gif2)]
     # Get dimensions
     width1, height1 = gif1.size
     width2, height2 = gif2.size

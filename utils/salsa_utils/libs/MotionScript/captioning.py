@@ -481,8 +481,8 @@ def main(coords, save_dir, babel_info=False, simplified_captions=False,
     # 3. It may consider to take a heuristic to pick longer sequences but only
     #       a limited set of joints e.g. left elbow, elbows, etc.
 
-    one = True          # Eligibility Adjustment
-    two = True         #
+    one = False          # Eligibility Adjustment
+    two = False         #
     three = False       # Export all the motioncodes to a json file
     # 1. Eligibility Adjustment
     if one:

@@ -1,4 +1,5 @@
 # Todo: Implemet data loader preprocess and Salsa SMPL to HumanML3D representation.
+from email.base64mime import body_encode
 from glob import glob
 
 from smplx import SMPLX
@@ -33,6 +34,8 @@ def salsa_smplx_to_pos3d(data):
                   gender=np.array2string(data['gender'])[1:-1], \
                   batch_size=len(b), num_betas=10, use_pca=False, use_face_contour=True, flat_hand_mean=True)
 
+
+
     keypoints3d = smplx.forward(
         # global_orient=torch.from_numpy(data['global_orient']).float(),
 
@@ -57,22 +60,99 @@ def salsa_smplx_to_pos3d(data):
     # keypoints3d = keypoints3d - np.tile(root, (1, 25))
     # # keypoints3d[:, :3] = root
 
-    # 1. after getting Jtr
-    trans_matrix = np.array([[1.0, 0.0, 0.0],
-                             [0.0, 0.0, 1.0],
-                             [0.0, 1.0, 0.0]])
-    keypoints3d = np.dot(keypoints3d, trans_matrix)
+    # 1. after getting Jtr Todo: why we need this?
+    # trans_matrix = np.array([[1.0, 0.0, 0.0],
+    #                          [0.0, 0.0, 1.0],
+    #                          [0.0, 1.0, 0.0]])
+    # keypoints3d = np.dot(keypoints3d, trans_matrix)
 
     keypoints3d = interp1d(np.linspace(0, 1, len(keypoints3d)), keypoints3d, axis=0)(
         np.linspace(0, 1, int(len(keypoints3d) * 20 / 30)))
 
 
     # Expected shape is (N, 52, 3) or (N, 24, 3)
-
+    # sanity_check_vide(data )
 
     return keypoints3d
 
 
+from tqdm import tqdm
+from MotionScript.stmc_renderer.humor import HumorRenderer
+def sanity_check_vide(data):
+
+    frames = data['poses'].shape[0]
+    b = np.repeat(data['betas'][:10], frames).reshape((frames, 10))
+    smplx = SMPLX(model_path='SMPLX_DEP\\models_lockedhead\\smplx', betas=b,
+                  gender=np.array2string(data['gender'])[1:-1], \
+                  batch_size=len(b), num_betas=10, use_pca=False, use_face_contour=True, flat_hand_mean=True)
+
+    smplx_forwarded = smplx.forward(
+        # global_orient=torch.from_numpy(data['global_orient']).float(),
+
+        global_orient=torch.from_numpy(data['poses'][:, :3], ).float(),
+        body_pose=torch.from_numpy(data['poses'][:, 3:66]).float(),
+        jaw_pose=torch.from_numpy(data['poses'][:, 66:69]).float(),
+        leye_pose=torch.from_numpy(data['poses'][:, 69:72]).float(),
+        reye_pose=torch.from_numpy(data['poses'][:, 72:75]).float(),
+        left_hand_pose=torch.from_numpy(data['poses'][:, 75:120]).float(),
+        right_hand_pose=torch.from_numpy(data['poses'][:, 120:]).float(),
+        transl=torch.from_numpy(data['trans']).float(),  # transl=torch.from_numpy(data['transl']).float(),
+        # betas=torch.from_numpy(data['betas'][:10]).float()
+        betas=torch.from_numpy(b).float()
+    )
+
+    # Extract vertices
+
+    vert = smplx_forwarded.vertices.detach().cpu().numpy()
+    faces = smplx_forwarded.v_shaped.detach().cpu().numpy()
+    vert, faces = vert[:200], faces[:200]
+
+
+    # Redner animation
+    smpl_renderer = HumorRenderer(20, imw=720, imh=720)
+    smpl_renderer(
+        vert, smplx.faces.astype(float),
+        output= data['file_name']+'.mp4', # 'smpl_video_path.mp4',
+        progress_bar=tqdm,
+    )
+
+
+def Salsa_smplx_body_shape(data):
+    frames = data['poses'].shape[0]
+    b = np.repeat(data['betas'][:10], frames).reshape((frames, 10))
+    smplx = SMPLX(model_path='SMPLX_DEP\\models_lockedhead\\smplx', betas=b,
+                  gender=np.array2string(data['gender'])[1:-1], \
+                  batch_size=len(b), num_betas=10, use_pca=False, use_face_contour=True, flat_hand_mean=True)
+
+    smplx_forwarded = smplx.forward(
+        # global_orient=torch.from_numpy(data['global_orient']).float(),
+
+        global_orient=torch.from_numpy(data['poses'][:, :3], ).float(),
+        body_pose=torch.from_numpy(data['poses'][:, 3:66]).float(),
+        jaw_pose=torch.from_numpy(data['poses'][:, 66:69]).float(),
+        leye_pose=torch.from_numpy(data['poses'][:, 69:72]).float(),
+        reye_pose=torch.from_numpy(data['poses'][:, 72:75]).float(),
+        left_hand_pose=torch.from_numpy(data['poses'][:, 75:120]).float(),
+        right_hand_pose=torch.from_numpy(data['poses'][:, 120:]).float(),
+        transl=torch.from_numpy(data['trans']).float(),  # transl=torch.from_numpy(data['transl']).float(),
+        # betas=torch.from_numpy(data['betas'][:10]).float()
+        betas=torch.from_numpy(b).float()
+    )
+
+    # Extract vertices
+
+
+    vert = smplx_forwarded.vertices.detach().cpu().numpy()
+    vert_20fps = interp1d(np.linspace(0, 1, len(vert)), vert, axis=0)(
+        np.linspace(0, 1, int(len(vert) * 20 / 30)))
+    faces = smplx.faces.astype(float)
+
+    body_shape_dic = {'betas': data['betas'],
+                        'smplx_vertices': vert_20fps,
+                        'smplx_faces': faces,
+                        'smplx_gender': data['gender'].astype(str).tolist()}
+
+    return body_shape_dic
 
 def salsa_smplx_to_rotmat(data):
     smpl_poses, smpl_trans = data['poses'], data['trans']
@@ -176,8 +256,11 @@ def read_all_salsa(base_path):
 
                 loaded = np.load(file.path, allow_pickle=True)
                 # Todo: HumanML3D/ raw_pose_processing.ipynb --> Done!
-                keypoints3d = salsa_smplx_to_pos3d(loaded)
+                dict_loaded = dict(loaded)
+                dict_loaded['file_name'] = file.name # for sanity check.
+                keypoints3d = salsa_smplx_to_pos3d(dict_loaded)
                 rotmat = salsa_smplx_to_rotmat(loaded)
+                body_shape =Salsa_smplx_body_shape(loaded)
                 # HumanML3D Representation
                 (data, ground_positions,
                  positions, l_velocity) = HM3D_F.process_file(keypoints3d,
@@ -186,6 +269,14 @@ def read_all_salsa(base_path):
                 HML3D_New_Joints = rec_ric_data.squeeze().numpy() # N, 22, 3
                 HML3D_New_Joints_Vec = data
 
+                raw_euler_poses = loaded['poses']
+                raw_euler_poses = (interp1d(np.linspace(0, 1, len(raw_euler_poses)),
+                                        raw_euler_poses, axis=0)
+                               (np.linspace(0, 1, int(len(raw_euler_poses) * 20 / 30))))
+                raw_trans = loaded['trans']
+                raw_trans = (interp1d(np.linspace(0, 1, len(raw_trans)),
+                                            raw_trans, axis=0)
+                                   (np.linspace(0, 1, int(len(raw_trans) * 20 / 30))))
 
                 # test:
                 # import os
@@ -220,14 +311,18 @@ def read_all_salsa(base_path):
                 # save subtitles and skeletons
                 poses = np.asarray(rotmat, dtype=np.float16)
                 clips[dataset_idx]['clips'].append(
-                    {'raw_euler_poses': loaded['poses'],
-                     'raw_trans': loaded['trans'],
+                    {'raw_euler_poses': raw_euler_poses,
+                     'raw_trans': raw_trans,
                      'keypoints3d': keypoints3d,
                      'rotmat': rotmat,
                      'HML3D_joints': HML3D_New_Joints,
                      'HML3D_joints_vec': HML3D_New_Joints_Vec,
                      'audio_raw': audio_y,
-                     'audio_sr': audio_sr
+                     'audio_sr': audio_sr,
+                     'body_betas': body_shape['betas'],
+                     'body_vertices': body_shape['smplx_vertices'],
+                     'body_faces': body_shape['smplx_faces'],
+                     'body_gender': body_shape['smplx_gender']
                      # Todo: add motioncodes here? No, we add it after windowing.
                      })
 
