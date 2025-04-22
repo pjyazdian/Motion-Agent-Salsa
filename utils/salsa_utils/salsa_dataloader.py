@@ -147,7 +147,8 @@ class Audio_tokenizer:
         wav = convert_audio(sample_audio, sr, 24000, 1)
         return wav, 24000
 
-from MotionScript.captioning_motion_Salsa import MotionScript_Forward_Salsa
+# from MotionScript.captioning_motion_Salsa import MotionScript_Forward_Salsa
+import MotionScript.captioning_motion_Salsa as MS_Salsa
 # class MotionScript:
 #
 #     def __init__(self, args):
@@ -295,7 +296,7 @@ class DataPreprocessor:
         # sample_audio_list_mels = []
         sample_audio_raw_list = []
         sample_audio_tokens_list = []
-
+        sample_ms_description_list = []
         # sentence_leve_latents_list = []
         # # GPT_3_STR_list = []
         # # GPT_3_Embedding_list = []
@@ -369,8 +370,15 @@ class DataPreprocessor:
                                 'body_vertices':  sample_body_vertices[100:140],
                                 'body_faces': sample_body_faces
                                 }
-            results = MotionScript_Forward_Salsa(input2MotionScript,
-                                                motion_id=f'Win_{i}')
+            ablation = ['chronological']
+
+            bining_details_printout, ms_non_agg, ms_agg, s, e  = MS_Salsa.MotionScript_Forward_Salsa(input2MotionScript,
+                                                motion_id=f'Win_{i}',
+                                                ablations=ablation)
+            sample_bin_ms = ms_non_agg # We pick the simples plain textual rep.
+            import importlib
+            importlib.reload(MS_Salsa)
+
 
             subdivision_start_time = start_idx / self.skeleton_resampling_fps
             subdivision_end_time = fin_idx / self.skeleton_resampling_fps
@@ -457,6 +465,8 @@ class DataPreprocessor:
             sample_vqtokens_list.append(sample_vqtokens)
             sample_audio_tokens_list.append(sample_audiotokens)
 
+            sample_ms_description_list.append(sample_bin_ms)
+
             # sample_words_list.append(sample_words)
             # sample_audio_list_mels.append(mel_chunks)
             # sample_audio_list_raws.append(raw_chunks)
@@ -466,10 +476,11 @@ class DataPreprocessor:
 
 
         if len(sample_skeleton3d_list) > 0:
-            with self.dst_lmdb_env.begin(write=True) as txn:
+            with (self.dst_lmdb_env.begin(write=True) as txn):
 
-                for poses_keypoints3d, poses_rotmat, poses_vq_tokens, audio_tokens, aux in \
-                        zip(sample_skeleton3d_list, sample_rotmat_list,
+                for poses_keypoints3d, poses_rotmat, ms_description, \
+                    poses_vq_tokens, audio_tokens, aux in \
+                        zip(sample_skeleton3d_list, sample_rotmat_list, sample_ms_description_list,
                             sample_vqtokens_list, sample_audio_tokens_list, aux_info): # , GPT_3_Embedding_list):
 
                     poses_keypoints3d = np.asarray(poses_keypoints3d)
@@ -479,7 +490,7 @@ class DataPreprocessor:
                     # GPT_3_Embedding = np.array(GPT_3_Embedding)
                     # save
                     k = '{:010}'.format(self.n_out_samples).encode('ascii')
-                    v = [poses_keypoints3d, poses_rotmat, poses_vqtokens, audio_tokens, aux]
+                    v = [poses_keypoints3d, poses_rotmat, ms_description, poses_vqtokens, audio_tokens, aux]
                     # v = [words, poses, audio_raws, audio_mels, aux, sentence_leve_latents, GPT_3_Embedding]
                     v = pyarrow.serialize(v).to_buffer()
                     txn.put(k, v)
@@ -633,13 +644,20 @@ class Salsa_Dataset(Dataset):
             # ] = pyarrow.deserialize(sample)
             # word_seq, pose_seq, audio, aux_info = sample
 
-            pose_seq_keypoints3d, pose_seq_rotmat, vq_tokens, aux_info = sample
-
+            # pose_seq_keypoints3d, pose_seq_rotmat, vq_tokens, aux_info = sample
+            pose_seq_keypoints3d, pose_seq_rotmat, ms_desc_bins, vq_tokens, audio_tokens, aux_info = sample
         vq_tokens = torch.from_numpy(vq_tokens).to(self.args.device)
+
+        # Todo: consider add the second dancer
+        # Todo: Now we need to call the prompt function.
 
         level = PAIR2LEVEL[(aux_info['vid'][:5]).lower()]
         caption = random.choice(SALSA_CAPTIONS[level])
-        return caption, vq_tokens,
+
+        audio_tokens = torch.from_numpy(audio_tokens).to(self.args.device)
+
+
+        return caption, ms_desc_bins, audio_tokens, vq_tokens
 
     def create_similarity_dataset(self, pickle_file: str, labelstxt_file: str) -> None:
         """TODO"""

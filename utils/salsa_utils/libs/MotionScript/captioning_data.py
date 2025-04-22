@@ -442,7 +442,7 @@ TIMECODE_OPERTATOR_VALUES = {
                                  ],
         # 'category_thresholds': [-5, -3, -1.5, -.5, 0.5, 1.5, 3, 5], # in a fraction of seconds (regardless of fps)
         # 'category_thresholds': [-1.5, -1.0, -0.5, -0.25, 0.25, 0.5, 1.0, 1.5], # in a fraction of seconds (regardless of fps)
-        'category_thresholds': [-3, -1.7, -0.9, -0.2, 0.2, 0.9, 1.7, 3], # in a fraction of seconds (regardless of fps)
+        'category_thresholds': [-3, -1.7, -0.9, -0.25, 0.25, 0.9, 1.7, 3], # in a fraction of seconds (regardless of fps)
 
         'random_max_offset': 0.1,                   # in fraction of seconds
     },
@@ -3057,7 +3057,7 @@ SPELLING_CORRECTIONS = [ ('moveing', 'moving'),
 AUGMENTATION_LENGTH = 2.0  # in seconds
 AUGMENTATION_PORTION = 1
 
-ablation = ['nothing for now']
+ablation = ['chronological_order']
 
 import MotionScript.captioning_data_ablation as cpd
 

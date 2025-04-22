@@ -176,6 +176,7 @@ def visualize_frames(pose_seq_data, trans, name):
 # Shay
 def visualize_frames_SFU_SALSA(pose_seq_data, trans, Motioncodes4vis, name, org_path, poses_rotvec, body_params):
     Mesh3D, Skeleton3D, Motioncodes, Merge, Dump_motioncodes = True, True, True, True, True
+    Mesh3D, Skeleton3D, Motioncodes, Merge, Dump_motioncodes = False, False, False, False, False
     if Dump_motioncodes:
         pickle.dump(Motioncodes4vis, open(f'out_temp/{name}/{name}_Motioncodes.mc', 'wb'))
     pose_seq_data =pose_seq_data.view(pose_seq_data.shape[0], -1)
@@ -565,9 +566,12 @@ def generate_text_HumanML3D(motion_id, motion_path, root_euler_path, start_frame
         # captioning_py.motioncode_stat_analysis(coords, save_dir)
         return captioning_py.motioncode_stat_analysis_step1_extraction(coords, save_dir)
 
-
-
+import importlib
 def MotionScript_Forward_Salsa(input_loaded, motion_id, motion_stats=False, ablations=[]):
+    print("Reloading felan")
+    importlib.reload(utils)
+    return actual_MotionScript_Forward_Salsa(input_loaded, motion_id, motion_stats=False, ablations=[])
+def actual_MotionScript_Forward_Salsa(input_loaded, motion_id, motion_stats=False, ablations=[]):
     import argparse
     # from config import POSESCRIPT_LOCATION
 
@@ -768,7 +772,7 @@ def MotionScript_Forward_Salsa(input_loaded, motion_id, motion_stats=False, abla
     #     plt.clf()
     # exit()
     # Calculate the differences between consecutive elements
-    if True:
+    if False:
         root_orient2print = root_euler_orient.cpu().numpy()
         for axis in [0, 1, 2]:
             plt.plot(root_orient2print[:, axis], label=f"Axis={axis}")
@@ -865,14 +869,16 @@ def MotionScript_Forward_Salsa(input_loaded, motion_id, motion_stats=False, abla
                            'faces': input_loaded['body_faces']}
             visualize_frames_SFU_SALSA(pose_seq_data, trans, motioncodes4vis, motion_id, motion_path, poses_rotvec, body_params)
 
-        if ' '.join(motion_description).strip() == '':
-            binning_detial, motion_descriptions_non_agg, motion_description = '', [''], ['']
-        else:
-            motion_descriptions_non_agg = [motion_babel_text.strip()] + motion_descriptions_non_agg
-            motion_description = [motion_babel_text.strip()] + motion_description
+        # if ' '.join(motion_description).strip() == '':
+        #     binning_detial, motion_descriptions_non_agg, motion_description = '', [''], ['']
+        # else:
+        #     # motion_descriptions_non_agg = [motion_babel_text.strip()] + motion_descriptions_non_agg
+        #     # motion_description = [motion_babel_text.strip()] + motion_description
         return ((binning_detial + str(2*"\n") + str(10*" ") + " BABEL Captions:\n\n *W.R.T. HumanML3D frames from AMASS\n" + motion_babel_details),
-                " ".join([x for x in motion_descriptions_non_agg if x!='']),
-                " ".join([x for x in motion_description if x!='']),
+                # " ".join([x for x in motion_descriptions_non_agg if x!='']),
+                motion_descriptions_non_agg,
+                # " ".join([x for x in motion_description if x!='']),
+                motion_description,
                 start_time, end_time)
 
     if args.action == 'motioncode_stats':

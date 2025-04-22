@@ -321,7 +321,7 @@ rotZ = lambda theta: torch.tensor(
             [[torch.cos(theta), -torch.sin(theta), 0], [torch.sin(theta), torch.cos(theta), 0], [0, 0, 1]]).to(torch.float64)
 
 def transf(rotMat, theta_deg, values):
-    theta_rad = math.pi * torch.tensor(theta_deg).float() / 180.0
+    theta_rad = (math.pi * torch.tensor(theta_deg).float() / 180.0).to(torch.float)
     return rotMat(theta_rad).mm(values.t()).t()
 def get_pose_sequence_data_from_file(pose_info, normalizer_frame=None):
     """
@@ -1625,12 +1625,19 @@ def get_pose_sequence_data_from_file_Salsa_Dance_preloaded(preloaded, normalizer
     j_seq = torch.tensor(pose_seq_data)
     adjusted_trans = torch.from_numpy(loaded['trans'])
     # # Not required:
+
     for frame_i in range(j_seq.shape[0]):
         j_seq[frame_i] = transf(rotX, -90, j_seq[frame_i])
         adjusted_trans[frame_i] = transf(rotX, -90, adjusted_trans[frame_i].unsqueeze(0)).squeeze()
-    #
+
         # j_seq[frame_i] = transf(rotY, 180, j_seq[frame_i])
         # adjusted_trans[frame_i] = transf(rotY, 180, adjusted_trans[frame_i].unsqueeze(0)).squeeze()
+
+    normalizer_frame = 1
+    if normalizer_frame:
+        pass
+    rad2deg = lambda theta_rad: 180.0 * theta_rad / math.pi
+
 
     j_seq = j_seq.detach().cpu().numpy()
     loaded['trans'] = adjusted_trans.detach().cpu().numpy()
@@ -1650,14 +1657,86 @@ def get_pose_sequence_data_from_file_Salsa_Dance_preloaded(preloaded, normalizer
     # for fr_i in range(loaded['poses'].shape[0]):
     #     rotation_fix = R.from_euler('X', -90, degrees=True)
     #     loaded['poses'][fr_i, :3] = (R.from_rotvec(loaded['poses'][fr_i, :3]) * rotation_fix).as_rotvec()
-    global_orientation = loaded['poses'][:, :3].reshape((-1, 3))
+
+    if False:
+        global_orientation = loaded['poses'][:, :3].reshape((-1, 3))
+        for frame in range(global_orientation.shape[0]):
+            global_orientation[frame, 0] = rad2deg(global_orientation[frame, 0])
+            global_orientation[frame, 1] = rad2deg(global_orientation[frame, 1])
+            global_orientation[frame, 2] = rad2deg(global_orientation[frame, 2])
+
+    normalizer_frame = 1
+    if normalizer_frame:
+        # thetax_first, thetay_first, thetaz_first = rotvec_to_eulerangles(pose[normalizer_frame, :1, :])
+        rotvec_pses_tensor_ = torch.from_numpy(loaded['poses'].reshape(loaded['poses'].shape[0], -1, 3)).to(torch.float)
+
+        thetax_first, thetay_first, thetaz_first = rotvec_to_eulerangles(rotvec_pses_tensor_[normalizer_frame, :1, :])
+
+
+
+        trans_oriented_first = torch.tensor(loaded['trans'][normalizer_frame]).unsqueeze(0).to(torch.float64)
+        # trans_oriented_first = transf(rotX, 0, trans_oriented_first)
+
+        pose3d_oriented = torch.tensor(j_seq).to(torch.float64)
+
+
+
+        # trans_oriented_first = transf(rotX, thetax_first, trans_oriented_first)
+        # trans_oriented_first = transf(rotY, thetay_first, trans_oriented_first)
+        # trans_oriented_first = transf(rotZ, thetaz_first, trans_oriented_first)
+
+        trans_oriented_first = transf(rotY, -rad2deg(thetaz_first), trans_oriented_first)
+
+        eular_orientation = np.zeros_like(loaded['trans']) # but for euler orientation
+        for frame in range(rotvec_pses_tensor_.shape[0]):
+
+            # 1. Update orientation of the current frame w.r.t. the first frame
+            thetax, thetay, thetaz = rotvec_to_eulerangles( rotvec_pses_tensor_[frame, :1,:] )
+
+            #Todo
+            # thetaz = thetaz - thetaz_first # facing forward to get correct directions.
+
+            eular_orientation[frame, 0] = thetax
+            eular_orientation[frame, 1] = thetay
+            eular_orientation[frame, 2] = thetaz
+
+            # pose[frame, 0:1, :] = eulerangles_to_rotvec(thetax, thetay, thetaz)
+
+            # 2. Normalize translation: Here we normalize wr.r.t. the 1st frame so we always start the same
+            trans_oriented = torch.tensor(loaded['trans'][frame]).unsqueeze(0).to(torch.float64)
+            # trans_oriented = transf(rotX, thetax, trans_oriented)
+            # trans_oriented = transf(rotY, thetay, trans_oriented)
+            # trans_oriented = transf(rotZ, thetaz, trans_oriented)
+            # trans_oriented = transf(rotY, rad2deg(thetax)+90, trans_oriented)
+            trans_oriented = transf(rotY, -rad2deg(thetaz), trans_oriented)
+
+            if normalizer_frame:
+                loaded['trans'][frame] = trans_oriented - trans_oriented_first
+            else:
+                loaded['trans'][frame] = trans_oriented
+
+
+            #Todo: here we normalize i.e. it always looks from the first person view point.
+            # This is because we want to kepp consistency through frames from egocentric vewi point.
+            # Especially for the SPATIAL rules, e.g., left-to-right
+            p3d_oriented = torch.tensor(pose3d_oriented[frame]).to(torch.float64)
+            # p3d_oriented = transf(rotX, rad2deg(thetax), p3d_oriented)
+            p3d_oriented = transf(rotY, -rad2deg(thetaz), p3d_oriented)
+            # p3d_oriented = transf(rotZ, rad2deg(thetaz), p3d_oriented)
+
+            pose3d_oriented[frame] = p3d_oriented
+
+
+
+
+
 
 
     # poses_rotvec4mesh = loaded['poses']
-    motion_tensor = torch.tensor(motions)
-    global_orientation = torch.from_numpy(global_orientation)
-    euler_angles = global_orientation
-
+    motion_tensor = torch.tensor(pose3d_oriented)
+    # global_orientation = torch.from_numpy((global_orientation))
+    # euler_angles = global_orientation # todo: we may need to rotate -90 degree here.
+    euler_angles = rad2deg(eular_orientation)
 
     FirstPerson_pred_xyz, pred_xyz = motion_tensor, motion_tensor
     r_rot_quat, r_pos, euler_angles_from_quat = None, torch.tensor(loaded['trans']), None

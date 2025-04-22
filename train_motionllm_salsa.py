@@ -32,9 +32,11 @@ def train(model, train_loader, args):
         pbar = tqdm(train_loader, desc=f"Epoch {epoch+1}/{args.epochs}")
 
         for batch in pbar:
-            caption, motion = batch[0], batch[1]  # assumes your custom DataLoader outputs this
+            # caption, motion = batch[0], batch[1]  # assumes your custom DataLoader outputs this
 
-            loss, acc, _, _ = model(caption, motion)
+            caption, ms_desc_bins, audio_tokens, motion_tokens = batch
+
+            loss, acc, _, _ = model(caption, ms_desc_bins, audio_tokens, motion_tokens)
             loss.backward()
             optimizer.step()
             optimizer.zero_grad()
@@ -66,7 +68,7 @@ def main():
     args.resume_ckpt = 'ckpt/motionllm.pth'
     args.use_wandb = False
     args.wandb_project = "Salsa-LLM"
-    args.wandb_run_name = "Second trial"
+    args.wandb_run_name = "Third trial"
 
     args.save_dir = f'output_trained/{args.wandb_run_name}'
     os.makedirs(args.save_dir, exist_ok=True)
@@ -74,8 +76,8 @@ def main():
         wandb.init(project=args.wandb_project, name=args.wandb_run_name, config=vars(args))
 
     model = MotionLLM(args)
-    if args.resume_ckpt:
-        model.load_model(args.resume_ckpt)
+    # if args.resume_ckpt:
+    #     model.load_model(args.resume_ckpt)
 
     model.to(args.device)
 

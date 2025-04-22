@@ -57,24 +57,49 @@ class MotionLLM(nn.Module):
         self.net.eval()
         self.net.to(self.device)
 
-        self.tokenizer.add_tokens(['<Motion>', '</Motion>'])
+
+        self.tokenizer.add_tokens(['<Motion>', '</Motion>',
+                                    # '<MotionScript>', '</MotionScript>',
+                                    # '<SEP>', '<Motionless>',
+                                    # '<Audio>', '</Audio>',
+                                    ])
         self.motion_token_indices = np.arange(self.args.nb_code) 
         self.motion_token_indices = len(self.tokenizer) + self.motion_token_indices
         for i in range(self.args.nb_code):
             self.tokenizer.add_tokens([f'<Motion_{i}>'])
         self.llm.resize_token_embeddings(len(self.tokenizer))
+
+
+        # Todo: Load the old model here and then add extra tokens
+        if args.resume_ckpt:
+            self.load_model(args.resume_ckpt)
+
+
+        Salsa_special_tokens = ['<MotionScript>', '</MotionScript>',
+                                '<SEP>', '<Motionless>',
+                                '<Audio>', '</Audio>']
+                                # Todo: +Plus Audio tokens
+        self.tokenizer.add_tokens(Salsa_special_tokens)
+        self.llm.resize_token_embeddings(len(self.tokenizer))
+
+
+
         self.llm.to(self.device)
         self.llm.eval()
 
         # print(self.llm)
+
+
     
-    def forward(self, caption, motion):
+    def forward(self, caption, ms_desc_bins, audio_tokens, motion_tokens):
 
         inputs_ids, targets, attention_mask = process_batch(tokenizer=self.tokenizer, 
                                                             batch_of_captions=caption,
                                                             max_tgt_len=200, 
-                                                            batch_of_motions=motion)
-        
+                                                            batch_of_motions=motion_tokens,
+                                                            batch_of_motionscript=ms_desc_bins,
+                                                            batch_of_audio=audio_tokens)
+
         # print(inputs_ids.shape)
         # print(targets.shape)
         # print(attention_mask.shape)

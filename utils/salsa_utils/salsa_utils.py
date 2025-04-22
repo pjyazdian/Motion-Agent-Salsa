@@ -242,7 +242,7 @@ def read_all_salsa(base_path):
         if not os.path.exists(rotmat_folder):
             os.mkdir(rotmat_folder)
         for takes_folder in os.listdir(smplx_folder):
-            if v_i > 2 : break
+            # if v_i > 2 : break
             for file in os.scandir(os.path.join(smplx_folder, takes_folder)):
                 if not file.name.endswith('.npz'): continue
                 # if "Pair2" not in file.name: continue

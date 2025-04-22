@@ -433,7 +433,7 @@ def main(coords, save_dir, babel_info=False, simplified_captions=False,
         # VELOCITY_ADJECTIVES = VELOCITY_ADJECTIVES_ABLATION
         pass
     if "chronological" in ablations:
-        # CHRONOLOGICAL_ORDER_ADJECTIV = CHRONOLOGICAL_ORDER_ADJECTIVE__ABLATION
+        CHRONOLOGICAL_ORDER_ADJECTIV = CHRONOLOGICAL_ORDER_ADJECTIVE__ABLATION
         pass
     # This doesn't work and I need to do it manually.
 
@@ -481,7 +481,7 @@ def main(coords, save_dir, babel_info=False, simplified_captions=False,
     # 3. It may consider to take a heuristic to pick longer sequences but only
     #       a limited set of joints e.g. left elbow, elbows, etc.
 
-    one = False          # Eligibility Adjustment
+    one = True          # Eligibility Adjustment
     two = False         #
     three = False       # Export all the motioncodes to a json file
     # 1. Eligibility Adjustment
@@ -489,7 +489,7 @@ def main(coords, save_dir, babel_info=False, simplified_captions=False,
         set_of_accepted_mkinds = [  'angular',
                                     'proximity',
                                     # 'spatial_relation_x', # no Spatials
-                                    # 'spatial_relation_y',
+                                    'spatial_relation_y',
                                     # 'spatial_relation_z',
                                     'displacement_x',
                                     'displacement_y',
@@ -560,7 +560,7 @@ def main(coords, save_dir, babel_info=False, simplified_captions=False,
 
     # Define non aggregated motion codes for the visualization
 
-    non_agg_motioncodes = motioncodes_agg = aggregate_motioncodes({'p_interpretations': p_interpretations,
+    non_agg_motioncodes = aggregate_motioncodes({'p_interpretations': p_interpretations,
                                                            'p_queries': p_queries}, # for detecting active joints
                                             motioncodes,
                                             Time_Bin_Info,
@@ -585,8 +585,8 @@ def main(coords, save_dir, babel_info=False, simplified_captions=False,
     # 2. Interpret timecodes to classify time connections
     # 3. Skip and Format based on the eligibilities
     # 4. No Aggregation step is required.
-    motioncodes_agg_t = infer_timecodeds(motioncodes_agg)
-    non_agg_motioncodes_t = infer_timecodeds(non_agg_motioncodes)
+    motioncodes_agg_t = infer_timecodeds(motioncodes_agg, [])
+    non_agg_motioncodes_t = infer_timecodeds(non_agg_motioncodes, ablation)
     # save
     saved_filepath = os.path.join(save_dir, "posecodes_aggregated.pt")
     # torch.save(posecodes, saved_filepath)
@@ -3270,7 +3270,7 @@ def aggreg_fbp_intptt_time_based(motioncodes_1p, max_range_bins, extra_verbose=F
         print()
     return updated_motioncodes
 
-def infer_timecodeds(agg_motioncodes):
+def infer_timecodeds(agg_motioncodes, ablation):
 
 
     # Here we immediately jump to skip and format since the
@@ -3354,6 +3354,8 @@ def infer_timecodeds(agg_motioncodes):
                     mc[2][t]['chronological_order'] = None
                 very_first_motion_of_the_bin_skipped = True
 
+                if 'chronological_order' in ablation:
+                    mc[2][t]['chronological_order'] = None
             #     No Agg. Step.
             # We are done here and decided about time relations
     return agg_motioncodes
@@ -3938,7 +3940,7 @@ def convert_motioncodes(posecodes, motioncodes, time_bin_info, simplified_captio
             # For the Ablation study on pose injection
             # posecode_start_end_pos = 'FINAL_STATE'
             posecode_start_end_pos = 'NO_POSE_INJECTION'
-            posecode_start_end_pos = 'INITIAL_STATE'
+            # posecode_start_end_pos = 'INITIAL_STATE'
 
             # Check if spatial relation posecode
             # We remove them since it is already included in the spatial
