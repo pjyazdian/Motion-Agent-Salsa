@@ -309,6 +309,14 @@ def read_all_salsa(base_path):
                     dataset_idx = 0  # train
 
                 # save subtitles and skeletons
+
+                #Todo: I used to use the following for sanity check
+                # which increases the size drastically:
+                body_shape['betas'] = None
+                body_shape['smplx_vertices'] = None
+                body_shape['smplx_faces'] = None
+                body_shape['smplx_gender'] = None
+
                 poses = np.asarray(rotmat, dtype=np.float16)
                 clips[dataset_idx]['clips'].append(
                     {'raw_euler_poses': raw_euler_poses,

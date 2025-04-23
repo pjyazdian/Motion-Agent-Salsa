@@ -214,7 +214,7 @@ class DataPreprocessor:
         #     self.n_out_samples_has_move = 0
 
         # create db for samples
-        map_size = 1024 * 12  # in MB
+        map_size = 1024 * 20  # in MB
         map_size <<= 20  # in B
         self.dst_lmdb_env: lmdb.Environment = lmdb.open(out_lmdb_dir, map_size=map_size)
         self.n_out_samples = 0
@@ -334,9 +334,10 @@ class DataPreprocessor:
             sample_raw_euler_poses = clip_raw_euler_poses[start_idx:fin_idx]
             sample_raw_trans = clip_raw_trans[start_idx:fin_idx]
 
-            sample_body_betas = clipt_body_betas
-            sample_body_vertices = clip_body_vertices[start_idx:fin_idx]
-            sample_body_faces = clip_body_faces
+
+            sample_body_betas = None # clipt_body_betas
+            sample_body_vertices = None # clip_body_vertices[start_idx:fin_idx]
+            sample_body_faces = None # clip_body_faces
 
             # from MotionScript.stmc_renderer.humor import HumorRenderer
             # smpl_renderer = HumorRenderer(20, imw=720, imh=720)
@@ -361,13 +362,14 @@ class DataPreprocessor:
             #     progress_bar=tqdm,
             # )
 
-
+            S, T = 80, 140
+            S, T = 0, -1
             input2MotionScript = {
-                                'poses': sample_raw_euler_poses[100:140].copy(),
-                                '3d_keypoints': sample_skeletons3d[100:140],
-                                'trans': sample_raw_trans[100:140],
+                                'poses': sample_raw_euler_poses[S:T].copy(),
+                                '3d_keypoints': sample_skeletons3d[S:T],
+                                'trans': sample_raw_trans[S:T],
                                 'body_betas': sample_body_betas,
-                                'body_vertices':  sample_body_vertices[100:140],
+                                'body_vertices':   None, # sample_body_vertices[S:T],
                                 'body_faces': sample_body_faces
                                 }
             ablation = ['chronological']
@@ -376,8 +378,8 @@ class DataPreprocessor:
                                                 motion_id=f'Win_{i}',
                                                 ablations=ablation)
             sample_bin_ms = ms_non_agg # We pick the simples plain textual rep.
-            import importlib
-            importlib.reload(MS_Salsa)
+            # import importlib
+            # importlib.reload(MS_Salsa)
 
 
             subdivision_start_time = start_idx / self.skeleton_resampling_fps
@@ -594,7 +596,7 @@ class Salsa_Dataset(Dataset):
 
         print("Reading data '{}'...".format(lmdb_dir))
         preloaded_dir = lmdb_dir + "_cache"
-        if not os.path.exists(preloaded_dir) or True:
+        if not os.path.exists(preloaded_dir):
             data_sampler = DataPreprocessor(
                 args,
                 lmdb_dir,

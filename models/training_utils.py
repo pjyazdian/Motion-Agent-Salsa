@@ -93,7 +93,7 @@ def build_training_instance_salsa(tokenizer, caption, motion_tokens, motion_scri
     input_ids.extend(motion_tokens.tolist())
     input_ids.extend(motion_end_token_ids)
 
-    target_ids.extend(motion_tokens.tolist())
+    target_ids.extend(motion_tokens.tolist()) # We already tokenized motion_tokens into LLMs tokenizer
     target_ids.extend(motion_end_token_ids)
 
     return input_ids, target_ids

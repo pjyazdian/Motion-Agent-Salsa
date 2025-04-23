@@ -1628,7 +1628,7 @@ def get_pose_sequence_data_from_file_Salsa_Dance_preloaded(preloaded, normalizer
 
     for frame_i in range(j_seq.shape[0]):
         j_seq[frame_i] = transf(rotX, -90, j_seq[frame_i])
-        adjusted_trans[frame_i] = transf(rotX, -90, adjusted_trans[frame_i].unsqueeze(0)).squeeze()
+        # adjusted_trans[frame_i] = transf(rotX, -90, adjusted_trans[frame_i].unsqueeze(0)).squeeze()
 
         # j_seq[frame_i] = transf(rotY, 180, j_seq[frame_i])
         # adjusted_trans[frame_i] = transf(rotY, 180, adjusted_trans[frame_i].unsqueeze(0)).squeeze()
@@ -1641,6 +1641,10 @@ def get_pose_sequence_data_from_file_Salsa_Dance_preloaded(preloaded, normalizer
 
     j_seq = j_seq.detach().cpu().numpy()
     loaded['trans'] = adjusted_trans.detach().cpu().numpy()
+    #Todo: I noticed this is very compatible with MotionScript implementation
+    # Seems the translation is not in the same space as the SMPLX 3D space scale.
+    # Therefore:
+    loaded['trans'] = j_seq[:, 0,:]
     # j_seq = loaded['3d_keypoints'] # pose_seq_data.detach().cpu().numpy()
 
     motions = j_seq

@@ -569,7 +569,7 @@ def generate_text_HumanML3D(motion_id, motion_path, root_euler_path, start_frame
 import importlib
 def MotionScript_Forward_Salsa(input_loaded, motion_id, motion_stats=False, ablations=[]):
     print("Reloading felan")
-    importlib.reload(utils)
+    # importlib.reload(utils)
     return actual_MotionScript_Forward_Salsa(input_loaded, motion_id, motion_stats=False, ablations=[])
 def actual_MotionScript_Forward_Salsa(input_loaded, motion_id, motion_stats=False, ablations=[]):
     import argparse
@@ -861,13 +861,15 @@ def actual_MotionScript_Forward_Salsa(input_loaded, motion_id, motion_stats=Fals
                                                                     motion_tracking=True, ablations=ablations)
             # Shay
 
-            motion_path = 'm_path'
-            save_dir = f'out_temp/{motion_id}'
-            if not os.path.isdir(save_dir):
-                os.makedirs(save_dir)
-            body_params = {'vertices': input_loaded['body_vertices'],
-                           'faces': input_loaded['body_faces']}
-            visualize_frames_SFU_SALSA(pose_seq_data, trans, motioncodes4vis, motion_id, motion_path, poses_rotvec, body_params)
+            # it's for sanity check
+            if False:
+                motion_path = 'm_path'
+                save_dir = f'out_temp/{motion_id}'
+                if not os.path.isdir(save_dir):
+                    os.makedirs(save_dir)
+                body_params = {'vertices': input_loaded['body_vertices'],
+                               'faces': input_loaded['body_faces']}
+                visualize_frames_SFU_SALSA(pose_seq_data, trans, motioncodes4vis, motion_id, motion_path, poses_rotvec, body_params)
 
         # if ' '.join(motion_description).strip() == '':
         #     binning_detial, motion_descriptions_non_agg, motion_description = '', [''], ['']

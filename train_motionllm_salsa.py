@@ -66,7 +66,8 @@ def main():
     args = get_args_parser()
     args.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     args.resume_ckpt = 'ckpt/motionllm.pth'
-    args.use_wandb = False
+    args.use_wandb = True
+    
     args.wandb_project = "Salsa-LLM"
     args.wandb_run_name = "Third trial"
 
@@ -85,7 +86,7 @@ def main():
 
     train_dataset = Salsa_Dataset(args,
                     lmdb_dir='utils/salsa_utils/Salsa_Temp/lmdb_Salsa/lmdb_train',
-                    n_poses=160,
+                    n_poses=100,
                     subdivision_stride=50,
                     pose_resampling_fps=20)
     args.batch_size = 16
