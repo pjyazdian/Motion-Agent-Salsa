@@ -88,6 +88,7 @@ class Motion_tokenizer:
         return (motion - self.mean) / self.std
 
     def npy263_tokenizer(self, input_motion):
+        # Todo: High! We need to polish the code such that it only returns index in VQ space, not the LLM.
         motion = self.normalize(input_motion)
         motion = torch.from_numpy(motion).float().to(self.device).unsqueeze(0)
         motion_tokens = self.net.encode(motion).squeeze(0)
@@ -649,7 +650,7 @@ class Salsa_Dataset(Dataset):
             # pose_seq_keypoints3d, pose_seq_rotmat, vq_tokens, aux_info = sample
             pose_seq_keypoints3d, pose_seq_rotmat, ms_desc_bins, vq_tokens, audio_tokens, aux_info = sample
         vq_tokens = torch.from_numpy(vq_tokens).to(self.args.device)
-
+        # Todo: this VQ_tokens are already transfered to LLM space (nb_llm_tokens+2 was addded)
         # Todo: consider add the second dancer
         # Todo: Now we need to call the prompt function.
 

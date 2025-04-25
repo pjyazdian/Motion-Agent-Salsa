@@ -67,9 +67,9 @@ def main():
     args.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     args.resume_ckpt = 'ckpt/motionllm.pth'
     args.use_wandb = True
-    
+
     args.wandb_project = "Salsa-LLM"
-    args.wandb_run_name = "Third trial"
+    args.wandb_run_name = "Fourth trial"
 
     args.save_dir = f'output_trained/{args.wandb_run_name}'
     os.makedirs(args.save_dir, exist_ok=True)
@@ -89,7 +89,7 @@ def main():
                     n_poses=100,
                     subdivision_stride=50,
                     pose_resampling_fps=20)
-    args.batch_size = 16
+    args.batch_size = 4
     train_loader = DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True, num_workers=0)
     args.save_every = 5
     args.epochs = 100

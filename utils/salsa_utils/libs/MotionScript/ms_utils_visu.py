@@ -680,3 +680,98 @@ def renderT2M_GPT(motions, outdir='test_vis', device_id=0, name=None, pred=True)
         imageio.mimsave(outdir + name + '_pred.gif', out, duration=1000* 1/20)
     else:
         imageio.mimsave(outdir + name + '_gt.gif', out, duration=1000* 1/20)
+
+from MotionScript.stmc_renderer.humor import HumorRenderer
+def render_HQ_Salsa(motions, outdir='test_vis', device_id=0, name=None, pred=True):
+    R_x = np.array([
+        [1, 0, 0],
+        [0, 0, -1],
+        [0, 1, 0]
+    ])
+    R_z = np.array([
+        [-1, 0, 0],
+        [0, -1, 0],
+        [0, 0, 1]
+    ])
+    motion_rotated_x = np.einsum('ij,fkj->fki', R_x, motions)
+    motion_final = np.einsum('ij,fkj->fki', R_z, motion_rotated_x)  # motion_rotated_y)
+    # Now `motion_final` contains the correctly oriented animation
+    motions = motion_final
+
+    frames, njoints, nfeats = motions.shape
+    MINS = motions.min(axis=0).min(axis=0)
+    MAXS = motions.max(axis=0).max(axis=0)
+
+    height_offset = MINS[1]
+    motions[:, :, 1] -= height_offset
+    trajec = motions[:, 0, [0, 2]]
+
+    j2s = joints2smpl(num_frames=frames, device_id=0, cuda=True)
+    rot2xyz = Rotation2xyz(device=torch.device("cuda:0"))
+    faces = rot2xyz.smpl_model.faces
+
+    if (not os.path.exists(outdir + name + '_pred.pt') and pred) or (
+            not os.path.exists(outdir + name + '_gt.pt') and not pred):
+        print(f'Running SMPLify, it may take a few minutes.')
+        motion_tensor, opt_dict = j2s.joint2smpl(motions)  # [nframes, njoints, 3]
+
+        vertices = rot2xyz(torch.tensor(motion_tensor).clone(), mask=None,
+                           pose_rep='rot6d', translation=True, glob=True,
+                           jointstype='vertices',
+                           vertstrans=True)
+
+
+    # Visualize mesh:
+    FACE_PATH = "utils/salsa_utils/libs/MotionScript/stmc_renderer/humor_render_tools/smplh.faces"
+    FACES = (np.int32(np.load(FACE_PATH)))
+
+    v = vertices.squeeze().permute(2, 0, 1).cpu().detach().numpy()
+    f = faces.astype(np.int32)
+
+    smpl_renderer = HumorRenderer(20, imw=720, imh=720)
+    smpl_renderer(v, FACES,
+                  output=os.path.join(outdir, name),  # 'smpl_video_path.mp4',
+                  progress_bar=tqdm)
+
+    return vertices, faces
+
+#
+#     R_x = np.array([
+#         [1, 0, 0],
+#         [0, 0, -1],
+#         [0, 1, 0]
+#     ])
+#     R_z = np.array([
+#         [-1, 0, 0],
+#         [0, -1, 0],
+#         [0, 0, 1]
+#     ])
+#     motion_rotated_x = np.einsum('ij,fkj->fki', R_x, motions)
+#     motion_final = np.einsum('ij,fkj->fki', R_z, motion_rotated_x)  # motion_rotated_y)
+#     # Now `motion_final` contains the correctly oriented animation
+#     motions = motion_final
+#
+#     frames, njoints, nfeats = motions.shape
+#     MINS = motions.min(axis=0).min(axis=0)
+#     MAXS = motions.max(axis=0).max(axis=0)
+#
+#     height_offset = MINS[1]
+#     motions[:, :, 1] -= height_offset
+#
+#
+#
+#
+#
+#
+#
+#
+# from MotionScript.stmc_renderer.humor import HumorRenderer
+# smpl_renderer = HumorRenderer(20, imw=720, imh=720)
+#
+#
+# v =vertices.squeeze().permute(2, 0, 1).cpu().detach().numpy()
+# f = faces.astype(np.int32)
+# smpl_renderer(v, FACES,
+#                 output=f'out_temp/{name}_3D_Mesh.mp4',  # 'smpl_video_path.mp4',
+#                 progress_bar=tqdm)
+#

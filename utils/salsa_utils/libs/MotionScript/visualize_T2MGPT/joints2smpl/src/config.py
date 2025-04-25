@@ -43,6 +43,7 @@ Part_Seg_DIR = "..\\visualize_T2MGPT\\joints2smpl\\smpl_models\\smplx_parts_segm
 # this is adapted to work in windows
 
 rt_path = '..\\visualize_T2MGPT\\joints2smpl\\'
+rt_path = 'utils\\salsa_utils\\libs\\MotionScript\\visualize_T2MGPT\\joints2smpl\\'
 
 
 SMPL_MODEL_DIR = rt_path + "smpl_models\\" # "./smpl_models/"

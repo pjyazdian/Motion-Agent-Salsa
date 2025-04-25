@@ -71,6 +71,7 @@ class MotionLLM(nn.Module):
 
 
         # Todo: Load the old model here and then add extra tokens
+        '''
         if args.resume_ckpt:
             self.load_model(args.resume_ckpt)
 
@@ -81,7 +82,7 @@ class MotionLLM(nn.Module):
                                 # Todo: +Plus Audio tokens
         self.tokenizer.add_tokens(Salsa_special_tokens)
         self.llm.resize_token_embeddings(len(self.tokenizer))
-
+        '''
 
 
         self.llm.to(self.device)
@@ -95,7 +96,7 @@ class MotionLLM(nn.Module):
 
         inputs_ids, targets, attention_mask = process_batch(tokenizer=self.tokenizer, 
                                                             batch_of_captions=caption,
-                                                            max_tgt_len=200, 
+                                                            max_tgt_len=900,
                                                             batch_of_motions=motion_tokens,
                                                             batch_of_motionscript=ms_desc_bins,
                                                             batch_of_audio=audio_tokens)

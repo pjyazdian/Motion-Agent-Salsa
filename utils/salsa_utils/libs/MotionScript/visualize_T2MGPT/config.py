@@ -1,6 +1,7 @@
 import os
 
 SMPL_DATA_PATH = "..\\visualize_T2MGPT\\body_models\\smpl"
+SMPL_DATA_PATH = 'utils\\salsa_utils\\libs\\MotionScript\\visualize_T2MGPT\\body_models\\smpl'
 
 SMPL_KINTREE_PATH = os.path.join(SMPL_DATA_PATH, "kintree_table.pkl")
 SMPL_MODEL_PATH = os.path.join(SMPL_DATA_PATH, "SMPL_NEUTRAL.pkl")
