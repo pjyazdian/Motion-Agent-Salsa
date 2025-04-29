@@ -625,7 +625,7 @@ class Salsa_Dataset(Dataset):
         Returns:
             The integer size of samples in the dataset.
         """
-        return self.n_samples
+        return self.n_samples-1 # last item is None
 
     def __getitem__(self, idx: int) -> Tuple[torch.Tensor, torch.Tensor]:
         """Get the item at a specific index in the dataset.

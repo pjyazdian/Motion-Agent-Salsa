@@ -37,7 +37,7 @@ def process_batch(tokenizer, batch_of_captions, max_tgt_len, batch_of_motions,
                                                                 caption=caption,
                                                                 motion_tokens=motion,
                                                                 motion_script_segments=ms_segments)
-                                                                # audi)
+                                                                # audio)
 
         batch_input_ids.append(torch.LongTensor(one_input_ids))
         batch_target_ids.append(torch.LongTensor(one_target_ids))
@@ -129,3 +129,366 @@ def format_motionscript_bins(motion_script_segments, window_sec=0.5):
     # Join all segments with <SEP> separator
     joined_script = " <SEP> ".join(script_lines)
     return joined_script
+
+
+SINGLE_DANCER_CAPTIONS = {
+    "beginner": [
+        "A beginner salsa dancer practices simple steps with careful timing.",
+        "A novice salsa dancer moves cautiously to the rhythm.",
+        "A beginner salsa dancer performs basic footwork with focused effort.",
+        "A new salsa dancer follows the beat with steady and controlled movements.",
+        "A first-time salsa dancer attempts a slow and structured routine."
+    ],
+    "intermediate": [
+        "An intermediate salsa dancer combines footwork and turns with growing confidence.",
+        "A mid-level salsa dancer executes a balanced and expressive routine.",
+        "An intermediate dancer performs with more rhythm and body coordination.",
+        "A salsa dancer at intermediate level adds flair while maintaining structure.",
+        "An intermediate-level salsa dancer blends technical steps with smoother transitions."
+    ],
+    "professional": [
+        "A professional salsa dancer delivers a dynamic and polished performance.",
+        "A skilled salsa dancer flows through complex moves with ease.",
+        "A professional dancer commands the floor with sharp and expressive motion.",
+        "A seasoned salsa dancer performs an intricate routine with confidence.",
+        "An expert salsa dancer dazzles with swift, precise, and rhythmic movements."
+    ]
+}
+TWO_DANCER_CAPTIONS = {
+    "beginner": [
+        "Two beginner salsa dancers move cautiously together, focusing on basic steps.",
+        "A novice salsa couple performs a simple, synchronized routine with steady rhythm.",
+        "New salsa dance partners coordinate basic footwork with careful timing.",
+        "First-time salsa dancers attempt a structured and slow partner routine.",
+        "Beginner salsa partners follow the beat closely with controlled movements."
+    ],
+    "intermediate": [
+        "An intermediate salsa couple performs turns and cross-body leads with growing fluidity.",
+        "Two intermediate dancers showcase balanced footwork and expressive partnerwork.",
+        "Intermediate salsa partners coordinate steps and spins with increasing confidence.",
+        "A salsa duo at intermediate level blends technical movements with smoother transitions.",
+        "Intermediate-level salsa dancers add flair while maintaining clear structure together."
+    ],
+    "professional": [
+        "A professional salsa couple dazzles with sharp, synchronized, and rhythmic movements.",
+        "Expert salsa dance partners flow through complex figures with precision and style.",
+        "Two skilled dancers deliver a dynamic and polished partner performance.",
+        "A seasoned salsa duo commands the floor with intricate and expressive choreography.",
+        "Professional salsa partners showcase effortless timing and seamless coordination."
+    ]
+}
+
+def generate_coarse_caption(proficiency, two_dancers=False, role=None):
+    """
+    Generate a coarse caption based on proficiency and task type.
+    If single dancer, also inject 'leader' or 'follower' into the caption.
+    """
+
+    if two_dancers:
+        caption = random.choice(TWO_DANCER_CAPTIONS[proficiency])
+    else:
+        assert role in ["leader", "follower"], "Role must be specified for single dancer tasks"
+        base_caption = random.choice(SINGLE_DANCER_CAPTIONS[proficiency])
+        # Replace 'dancer' with 'leader' or 'follower'
+        if "dancer" in base_caption:
+            caption = base_caption.replace("dancer", role)
+        else:
+            # Just in case (shouldn't happen), fallback
+            caption = base_caption
+    return caption
+
+def build_training_instance_salsa(
+    tokenizer,
+    caption,
+    motion_tokens,
+    motion_script_segments,
+    audio_tokens=None  # New optional input
+):
+    """
+    Build a single training instance:
+    Input: coarse caption + motion script (+ optional audio tokens)
+    Output: motion token sequence
+    """
+
+    input_ids = []
+    target_ids = []
+    bos_token_id = tokenizer.bos_token_id
+
+    # Start with BOS token
+    input_ids.append(bos_token_id)
+    target_ids.append(-100)  # Ignore BOS during loss calculation
+
+    # Prepare motion script (join list with <SEP>)
+    joined_motion_script = format_motionscript_bins(motion_script_segments)
+
+    # --- Build prompt sections ---
+    system_prompt = (
+        "Below is an instruction that describes a task, paired with an input that provides further context. "
+        "Write a response that appropriately completes the request.\n\n"
+    )
+    instruction = "### Instruction:\nGenerate a motion matching the following human motion description and detailed motion script.\n\n"
+    input_section = f"### Input:\n{caption}\n\n"
+    motion_script_section = f"### MotionScript:\n{joined_motion_script}\n\n"
+
+    # Optionally add audio section if available
+    if audio_tokens is not None:
+        audio_section = "<AudioTokens> " + " ".join(map(str, audio_tokens)) + " </AudioTokens>\n\n"
+    else:
+        audio_section = ""
+
+    response_marker = "Response: <Motion>"
+
+    # --- Build full prompt ---
+    full_prompt = system_prompt + instruction + input_section + motion_script_section + audio_section + response_marker
+
+    # Tokenize the prompt part
+    prompt_token_ids = tokenizer(full_prompt, add_special_tokens=False).input_ids
+    input_ids.extend(prompt_token_ids)
+    target_ids.extend([-100] * len(prompt_token_ids))  # Mask prompt part for loss
+
+    # Tokenize motion closing
+    motion_end_token_ids = tokenizer("</Motion><eos>", add_special_tokens=False).input_ids
+
+    # Append the motion tokens and motion end marker
+    input_ids.extend(motion_tokens.tolist())
+    input_ids.extend(motion_end_token_ids)
+
+    target_ids.extend(motion_tokens.tolist())
+    target_ids.extend(motion_end_token_ids)
+
+    return input_ids, target_ids
+
+
+import random
+
+import random
+
+def build_random_training_instance_salsa(
+    tokenizer,
+    leader_motion_script_segments,
+    follower_motion_script_segments,
+    leader_motion_tokens,
+    follower_motion_tokens,
+    audio_tokens,
+    proficiency_level,
+    allowed_tasks=None,
+    snippet_prob=0.3,
+    min_snippet_steps=1,
+    max_snippet_steps=4,
+):
+    """
+    Build a full random training instance (motion/script/audio/leader/follower), ready for batching.
+    """
+
+    # 1. Pick task
+    all_tasks = [
+        "caption_script_to_motion",
+        "caption_script_audio_to_motion",
+        "leader_to_follower",
+        "follower_to_leader",
+        "caption_to_motionscript",
+        "caption_to_motionscript_audio",
+        "motionscript_to_motion",
+        "motion_to_motionscript",
+        "snippet_script_to_motion",
+        "snippet_motion_to_script",
+    ]
+    task = random.choice(allowed_tasks if allowed_tasks else all_tasks)
+
+    # 2. Random snippet decision
+    snippet_task = False
+    if task.startswith("snippet_") or random.random() < snippet_prob:
+        snippet_task = True
+
+    # 3. Pick input role
+    if task in ["caption_script_to_motion", "caption_script_audio_to_motion", "caption_to_motionscript", "caption_to_motionscript_audio", "motionscript_to_motion"]:
+        role = random.choice(["leader", "follower"])
+    elif task == "leader_to_follower":
+        role = "leader"
+    elif task == "follower_to_leader":
+        role = "follower"
+    else:
+        role = None  # two-person tasks
+
+    # 4. Pick caption
+    if role:
+        caption = generate_coarse_caption(proficiency_level, two_dancers=False, role=role)
+    else:
+        caption = generate_coarse_caption(proficiency_level, two_dancers=True)
+
+    # 5. Pick data for leader/follower
+    if role == "leader":
+        motion_script_segments = leader_motion_script_segments
+        motion_tokens = leader_motion_tokens
+    elif role == "follower":
+        motion_script_segments = follower_motion_script_segments
+        motion_tokens = follower_motion_tokens
+    else:
+        motion_script_segments = None  # two-person
+        motion_tokens = None
+
+    # 6. Snippet slicing
+    if snippet_task and motion_script_segments is not None:
+        snippet_size = random.randint(min_snippet_steps, max_snippet_steps)
+        start_idx = random.randint(0, max(0, len(motion_script_segments) - snippet_size))
+
+        motion_script_segments = motion_script_segments[start_idx:start_idx + snippet_size]
+        motion_tokens = motion_tokens[start_idx * 2: (start_idx + snippet_size) * 2]
+        audio_tokens = audio_tokens[start_idx * 20: (start_idx + snippet_size) * 20]
+
+    # 7. Audio random inclusion
+    allow_audio = task in [
+        "caption_script_audio_to_motion",
+        "caption_to_motionscript_audio",
+        "leader_to_follower",
+        "follower_to_leader",
+        "motionscript_to_motion",
+        "snippet_script_to_motion"
+    ]
+    use_audio = (audio_tokens is not None) and allow_audio and (random.random() < 0.5)
+
+    # 8. Initialize
+    input_ids = []
+    target_ids = []
+    bos_token_id = tokenizer.bos_token_id
+
+    input_ids.append(bos_token_id)
+    target_ids.append(-100)
+
+    system_prompt = (
+        "Below is an instruction that describes a task, paired with an input that provides further context. "
+        "Write a response that appropriately completes the request.\n\n"
+    )
+
+    input_section, motion_script_section, audio_section, response_marker = "", "", "", ""
+
+    # 9. Build sections
+    if task == "caption_script_to_motion":
+        instruction = "### Instruction:\nGenerate a motion sequence based on description and motion script.\n\n"
+        input_section = f"### Input:\n{caption}\n\n"
+        motion_script_section = f"### MotionScript:\n<{role.capitalize()}Script> {format_motionscript_bins(motion_script_segments)} </{role.capitalize()}Script>\n\n"
+        response_marker = "<Motion>"
+        target_tokens = motion_tokens
+
+    elif task == "caption_script_audio_to_motion":
+        instruction = "### Instruction:\nGenerate a motion sequence based on description, motion script, and music.\n\n"
+        input_section = f"### Input:\n{caption}\n\n"
+        motion_script_section = f"### MotionScript:\n<{role.capitalize()}Script> {format_motionscript_bins(motion_script_segments)} </{role.capitalize()}Script>\n\n"
+        audio_section = "<AudioTokens> " + " ".join(map(str, audio_tokens)) + " </AudioTokens>\n\n" if use_audio else ""
+        response_marker = "<Motion>"
+        target_tokens = motion_tokens
+
+    elif task == "leader_to_follower":
+        instruction = "### Instruction:\nGiven leader motion (and optionally music), predict follower motion.\n\n"
+        input_section = f"### Input:\n{caption}\n\n"
+        motion_script_section = "<LeaderMotion> " + " ".join(map(str, leader_motion_tokens)) + " </LeaderMotion>\n\n"
+        if use_audio:
+            audio_section = "<AudioTokens> " + " ".join(map(str, audio_tokens)) + " </AudioTokens>\n\n"
+        response_marker = "<FollowerMotion>"
+        target_tokens = follower_motion_tokens
+
+    elif task == "follower_to_leader":
+        instruction = "### Instruction:\nGiven follower motion (and optionally music), predict leader motion.\n\n"
+        input_section = f"### Input:\n{caption}\n\n"
+        motion_script_section = "<FollowerMotion> " + " ".join(map(str, follower_motion_tokens)) + " </FollowerMotion>\n\n"
+        if use_audio:
+            audio_section = "<AudioTokens> " + " ".join(map(str, audio_tokens)) + " </AudioTokens>\n\n"
+        response_marker = "<LeaderMotion>"
+        target_tokens = leader_motion_tokens
+
+    elif task == "caption_to_motionscript":
+        instruction = "### Instruction:\nGenerate a detailed motion script from the description.\n\n"
+        input_section = f"### Input:\n{caption}\n\n"
+        response_marker = f"<{role.capitalize()}Script>"
+        target_tokens = tokenizer(format_motionscript_bins(motion_script_segments), add_special_tokens=False).input_ids
+
+    elif task == "caption_to_motionscript_audio":
+        instruction = "### Instruction:\nGenerate a detailed motion script from description and music.\n\n"
+        input_section = f"### Input:\n{caption}\n\n"
+        audio_section = "<AudioTokens> " + " ".join(map(str, audio_tokens)) + " </AudioTokens>\n\n" if use_audio else ""
+        response_marker = f"<{role.capitalize()}Script>"
+        target_tokens = tokenizer(format_motionscript_bins(motion_script_segments), add_special_tokens=False).input_ids
+
+    elif task == "motionscript_to_motion":
+        instruction = "### Instruction:\nGenerate a motion sequence from the provided motion script.\n\n"
+        input_section = ""
+        motion_script_section = f"<{role.capitalize()}Script> {format_motionscript_bins(motion_script_segments)} </{role.capitalize()}Script>\n\n"
+        audio_section = "<AudioTokens> " + " ".join(map(str, audio_tokens)) + " </AudioTokens>\n\n" if use_audio else ""
+        response_marker = "<Motion>"
+        target_tokens = motion_tokens
+
+    elif task == "motion_to_motionscript":
+        instruction = "### Instruction:\nDescribe the following motion sequence in a detailed motion script.\n\n"
+        # Randomly one person or both
+        if random.random() < 0.5:
+            # Single person
+            if random.random() < 0.5:
+                motion_script_section = "<LeaderMotion> " + " ".join(map(str, leader_motion_tokens)) + " </LeaderMotion>\n\n"
+                response_marker = "<LeaderScript>"
+                target_tokens = tokenizer(format_motionscript_bins(leader_motion_script_segments), add_special_tokens=False).input_ids
+            else:
+                motion_script_section = "<FollowerMotion> " + " ".join(map(str, follower_motion_tokens)) + " </FollowerMotion>\n\n"
+                response_marker = "<FollowerScript>"
+                target_tokens = tokenizer(format_motionscript_bins(follower_motion_script_segments), add_special_tokens=False).input_ids
+        else:
+            # Both dancers
+            motion_script_section = (
+                    "<LeaderMotion> " + " ".join(map(str, leader_motion_tokens)) + " </LeaderMotion>\n\n"
+                                                                                   "<FollowerMotion> " + " ".join(
+                map(str, follower_motion_tokens)) + " </FollowerMotion>\n\n"
+            )
+            response_marker = ""  # no need here, because response is both parts
+            target_text = (
+                    "<LeaderScript> " + format_motionscript_bins(leader_motion_script_segments) + " </LeaderScript>\n"
+                                                                                                  "<FollowerScript> " + format_motionscript_bins(
+                follower_motion_script_segments) + " </FollowerScript>"
+            )
+
+            target_tokens = tokenizer(target_text, add_special_tokens=False).input_ids
+
+    elif task == "snippet_script_to_motion":
+        instruction = "### Instruction:\nGenerate a short motion snippet from the partial motion script.\n\n"
+        input_section = f"### Input:\n{caption}\n\n"
+        motion_script_section = f"<{role.capitalize()}Script> {format_motionscript_bins(motion_script_segments)} </{role.capitalize()}Script>\n\n"
+        audio_section = "<AudioTokens> " + " ".join(map(str, audio_tokens)) + " </AudioTokens>\n\n" if use_audio else ""
+        response_marker = "<Motion>"
+        target_tokens = motion_tokens
+
+    elif task == "snippet_motion_to_script":
+        instruction = "### Instruction:\nDescribe the following motion snippet in short motion script.\n\n"
+        motion_script_section = "<Motion> " + " ".join(map(str, motion_tokens)) + " </Motion>\n\n"
+        response_marker = "<MotionScript>"
+        target_tokens = tokenizer(format_motionscript_bins(motion_script_segments), add_special_tokens=False).input_ids
+
+    else:
+        raise ValueError(f"Unknown task type: {task}")
+
+    # 10. Assemble full prompt
+    full_prompt = (
+        system_prompt
+        + instruction
+        + input_section
+        + motion_script_section
+        + audio_section
+        + f"Response: {response_marker}"
+    )
+
+    prompt_token_ids = tokenizer(full_prompt, add_special_tokens=False).input_ids
+    input_ids.extend(prompt_token_ids)
+    target_ids.extend([-100] * len(prompt_token_ids))
+
+    input_ids.extend(target_tokens)
+    target_ids.extend(target_tokens)
+
+    # 11. Close
+    if response_marker.endswith("<Motion>") or response_marker.endswith("<LeaderMotion>") or response_marker.endswith("<FollowerMotion>"):
+        end_token_ids = tokenizer("</Motion><eos>", add_special_tokens=False).input_ids
+    elif response_marker.endswith("<MotionScript>") or response_marker.endswith("<LeaderScript>") or response_marker.endswith("<FollowerScript>"):
+        end_token_ids = tokenizer("</MotionScript><eos>", add_special_tokens=False).input_ids
+    else:
+        end_token_ids = []
+
+    input_ids.extend(end_token_ids)
+    target_ids.extend(end_token_ids)
+
+    return input_ids, target_ids, task

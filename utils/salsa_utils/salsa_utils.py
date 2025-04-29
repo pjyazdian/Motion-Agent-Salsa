@@ -118,6 +118,13 @@ def sanity_check_vide(data):
 
 
 def Salsa_smplx_body_shape(data):
+
+    body_shape_dic = {'betas': None,
+                      'smplx_vertices': None,
+                      'smplx_faces': None,
+                      'smplx_gender': None}
+    return body_shape_dic
+
     frames = data['poses'].shape[0]
     b = np.repeat(data['betas'][:10], frames).reshape((frames, 10))
     smplx = SMPLX(model_path='SMPLX_DEP\\models_lockedhead\\smplx', betas=b,
@@ -352,4 +359,223 @@ def read_all_salsa(base_path):
         db[i].sync()
         db[i].close()
 
-read_all_salsa('Salsa_Temp')
+def read_all_salsa_pairs(base_path):
+
+    out_path = os.path.join(base_path, 'lmdb_Salsa_pair')
+    if not os.path.exists(out_path):
+        os.makedirs(out_path)
+
+    map_size = 1024 * 12  # in MB
+    map_size <<= 20  # in B
+    db = [lmdb.open(os.path.join(out_path, 'lmdb_train'), map_size=map_size),
+          lmdb.open(os.path.join(out_path, 'lmdb_test'), map_size=map_size)]
+
+    # delete existing files
+    for i in range(2):
+        with db[i].begin(write=True) as txn:
+            txn.drop(db[i].open_db())
+
+    # all_poses = []
+    all_keypoints3d = []
+    all_rotmat = []
+
+
+    smpl_root = 'S:\Payam\Dance_Salsa_SFU\delivery_241121\delivery_241121'
+    pos3d_root = './salsa_data/motion/pos3d'
+    rotmat_root = './salsa_data/motion/rotmat'
+
+    mp4_root = 'S:\Payam\Dance_Salsa_SFU\salsa project\salsa project\Animations'
+    mp4_files = glob(os.path.join(mp4_root, '*.mp4'))
+    smplx2mp4_map = {os.path.basename(f).replace('.mp4', ''): f for f in mp4_files}
+
+    os.makedirs(pos3d_root, exist_ok=True)
+    os.makedirs(rotmat_root, exist_ok=True)
+    v_i = 0
+    ex_fps = 20
+    fps = 30
+
+    for folder in os.listdir(smpl_root):
+        # if v_i>2:
+        #     break
+        print(folder)
+        smplx_folder = os.path.join(smpl_root, folder)
+        pos3d_folder = os.path.join(pos3d_root, folder)
+        rotmat_folder = os.path.join(rotmat_root, folder)
+        if not os.path.exists(pos3d_folder):
+            os.mkdir(pos3d_folder)
+        if not os.path.exists(rotmat_folder):
+            os.mkdir(rotmat_folder)
+        for takes_folder in os.listdir(smplx_folder):
+            # if v_i > 2 : break
+            for file1 in os.scandir(os.path.join(smplx_folder, takes_folder)):
+                if not file1.name.endswith('.npz'): continue
+                # if "Pair2" not in file.name: continue
+
+                if 'leader' not in file1.name: continue
+                leader_file = file1
+
+                # find the follower file:
+                for file2 in os.scandir(os.path.join(smplx_folder, takes_folder)):
+                    if 'follower' in file2.name:
+                        follower_file = file2
+
+
+
+                mp4_path = smplx2mp4_map['_'.join(file1.name.split('_')[:5])]
+                audio_path = mp4_path.replace('mp4', 'wav')
+                audio_y, audio_sr = audio_from_mp4(mp4_path, audio_path)
+
+
+                loaded_leader = np.load(leader_file.path, allow_pickle=True)
+                loaded_follower = np.load(follower_file.path, allow_pickle=True)
+
+                # Todo: HumanML3D/ raw_pose_processing.ipynb --> Done!
+                dict_loaded_L = dict(loaded_leader)
+                dict_loaded_F = dict(loaded_follower)
+
+                dict_loaded_L['file_name'] = leader_file.name # for sanity check.
+                dict_loaded_F['file_name'] = follower_file.name
+
+                keypoints3d_L = salsa_smplx_to_pos3d(dict_loaded_L)
+                keypoints3d_F = salsa_smplx_to_pos3d(dict_loaded_F)
+
+                rotmat_L = salsa_smplx_to_rotmat(loaded_leader)
+                rotmat_F = salsa_smplx_to_rotmat(loaded_follower)
+
+                # Todo: do we need to keep this here or comment it out?
+                body_shape_L =Salsa_smplx_body_shape(loaded_leader)
+                body_shape_F = Salsa_smplx_body_shape(loaded_follower)
+
+                # HumanML3D Representation
+                (data_L, ground_positions_L,
+                 positions_L, l_velocity_L) = HM3D_F.process_file(keypoints3d_L,
+                                                              0.002)
+                (data_F, ground_positions_F,
+                 positions_F, l_velocity_F) = HM3D_F.process_file(keypoints3d_F,
+                                                              0.002)
+                rec_ric_data_L = HM3D_F.recover_from_ric(torch.from_numpy(data_L).unsqueeze(0).float(), joints_num)
+                rec_ric_data_F = HM3D_F.recover_from_ric(torch.from_numpy(data_F).unsqueeze(0).float(), joints_num)
+
+                HML3D_New_Joints_L = rec_ric_data_L.squeeze().numpy() # N, 22, 3
+                HML3D_New_Joints_F = rec_ric_data_F.squeeze().numpy()  # N, 22, 3
+
+                HML3D_New_Joints_Vec_L = data_L
+                HML3D_New_Joints_Vec_F = data_F
+
+
+
+                raw_euler_poses_L = loaded_leader['poses']
+                raw_euler_poses_F = loaded_follower['poses']
+
+                raw_euler_poses_L = (interp1d(np.linspace(0, 1, len(raw_euler_poses_L)),
+                                        raw_euler_poses_L, axis=0)
+                               (np.linspace(0, 1, int(len(raw_euler_poses_L) * 20 / 30))))
+
+                raw_euler_poses_F = (interp1d(np.linspace(0, 1, len(raw_euler_poses_F)),
+                                              raw_euler_poses_F, axis=0)
+                                     (np.linspace(0, 1, int(len(raw_euler_poses_F) * 20 / 30))))
+
+                raw_trans_L = loaded_leader['trans']
+                raw_trans_F = loaded_follower['trans']
+
+                raw_trans_L = (interp1d(np.linspace(0, 1, len(raw_trans_L)),
+                                            raw_trans_L, axis=0)
+                                   (np.linspace(0, 1, int(len(raw_trans_L) * 20 / 30))))
+
+                raw_trans_F = (interp1d(np.linspace(0, 1, len(raw_trans_F)),
+                                      raw_trans_F, axis=0)
+                             (np.linspace(0, 1, int(len(raw_trans_F) * 20 / 30))))
+
+                # test:
+                # import os
+                # pjoin = os.path.join
+                # np.save(pjoin(out_path, 'SFU_SALSA_EXAMPLE.npy'), HML3D_New_Joints_Vec[:1000])
+
+                # np.save(pjoin(save_dir1, source_file), rec_ric_data.squeeze().numpy())
+                # np.save(pjoin(save_dir2, source_file), data)
+                # Todo: motion_representation.ipynb
+                # Done!
+
+                # # Sanity Check:
+                # save_path = '1.gif'
+                # # HM3D_F.plot_3d_motion(save_path, kinematic_chain, New_Joints[:20], title="None", fps=20, radius=4)
+                # ARGUS = HML3D_New_Joints[:400], save_path, 'title'
+                # HM3D_F.plot_3d_motion_Payam(ARGUS)
+
+                # for v_i, bvh_file in enumerate(bvh_files):
+                name = os.path.split(leader_file.name)[1][:-4] + ',' + \
+                       os.path.split(follower_file.name)[1][:-4]
+                print(name)
+
+                # process
+                clips = [{'vid': name, 'clips': []},  # train
+                         {'vid': name, 'clips': []}]  # validation
+
+                # split
+                if v_i == 0:
+                    dataset_idx = 1  # validation
+                else:
+                    dataset_idx = 0  # train
+
+                # save subtitles and skeletons
+
+                #Todo: I used to use the following for sanity check
+                # which increases the size drastically:
+                body_shape_L['betas'] = None
+                body_shape_L['smplx_vertices'] = None
+                body_shape_L['smplx_faces'] = None
+                body_shape_L['smplx_gender'] = None
+
+                body_shape_F['betas'] = None
+                body_shape_F['smplx_vertices'] = None
+                body_shape_F['smplx_faces'] = None
+                body_shape_F['smplx_gender'] = None
+
+                poses = np.asarray(rotmat_L, dtype=np.float16)
+                clips[dataset_idx]['clips'].append(
+                    {'raw_euler_poses_L': raw_euler_poses_L,
+                     'raw_trans_L': raw_trans_L,
+                     'keypoints3d_L': keypoints3d_L,
+                     'rotmat_L': rotmat_L,
+                     'HML3D_joints_L': HML3D_New_Joints_L,
+                     'HML3D_joints_vec_L': HML3D_New_Joints_Vec_L,
+
+                     'raw_euler_poses_F': raw_euler_poses_F,
+                     'raw_trans_F': raw_trans_F,
+                     'keypoints3d_F': keypoints3d_F,
+                     'rotmat_F': rotmat_F,
+                     'HML3D_joints_F': HML3D_New_Joints_F,
+                     'HML3D_joints_vec_F': HML3D_New_Joints_Vec_F,
+
+                     'audio_raw': audio_y,
+                     'audio_sr': audio_sr,
+
+
+
+                     # Todo: this was for sanity check.
+                     'body_betas': body_shape_L['betas'],
+                     'body_vertices': body_shape_L['smplx_vertices'],
+                     'body_faces': body_shape_L['smplx_faces'],
+                     'body_gender': body_shape_L['smplx_gender']
+                     # Todo: add motioncodes here? No, we add it after windowing.
+                     })
+
+                # write to db
+                for i in range(2):
+                    with db[i].begin(write=True) as txn:
+                        if len(clips[i]['clips']) > 0:
+                            k = '{:010}'.format(v_i).encode('ascii')
+                            v = pyarrow.serialize(clips[i]).to_buffer()
+                            txn.put(k, v)
+
+                # # all_poses.append(poses)
+                # all_keypoints3d.append(keypoints3d)
+                # all_rotmat.append(rotmat)
+                v_i += 1
+
+        # close db
+    for i in range(2):
+        db[i].sync()
+        db[i].close()
+
+read_all_salsa_pairs('Salsa_Temp')

@@ -66,7 +66,7 @@ def main():
     args = get_args_parser()
     args.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     args.resume_ckpt = 'ckpt/motionllm.pth'
-    args.use_wandb = True
+    args.use_wandb = False
 
     args.wandb_project = "Salsa-LLM"
     args.wandb_run_name = "Fourth trial"
