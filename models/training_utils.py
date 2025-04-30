@@ -517,8 +517,68 @@ def build_random_training_instance_salsa_old(
 # Full final version of build_random_training_instance_salsa with all original, cross-role, and combined tasks
 
 
+import random
+PAIR2LEVEL = {
+    f"pair{i}": level
+    for i, level in zip(range(1, 10), ["beginner", "intermediate", "professional"] * 3)
+}
+def process_batch_Salsa(tokenizer, batch_aux_info, batch_ms_desc_L, batch_ms_des_F,
+                                    batch_vq_tokens_L, batch_vq_tokens_F,
+                                    batch_audio_tokens,
+                                    max_tgt_len):
 
-def build_random_training_instance_salsa(
+    batch_input_ids, batch_target_ids = [], []
+    for aux, ms_desc_L, ms_des_F, vq_tokens_L, vq_tokens_F, audio_tokens in \
+            zip(batch_aux_info, batch_ms_desc_L, batch_ms_des_F, \
+                               batch_vq_tokens_L, batch_vq_tokens_F, \
+                                    batch_audio_tokens):
+
+        # one_input_ids, one_target_ids = build_one_instance(tokenizer, caption, motion)
+        # one_input_ids, one_target_ids = build_training_instance_salsa(tokenizer=tokenizer,
+        #                                                         caption=caption,
+        #                                                         motion_tokens=motion,
+        #                                                         motion_script_segments=ms_segments)
+        #                                                         # audio)
+        level = aux # PAIR2LEVEL[(aux['vid'][:5]).lower()]
+        one_input_ids, one_target_ids = build_random_training_instance_salsa_prompt(
+            tokenizer=tokenizer,
+            leader_motion_script_segments=ms_desc_L.split('-->'),
+            follower_motion_script_segments=ms_des_F.split('-->'),
+            leader_motion_tokens=vq_tokens_L,
+            follower_motion_tokens=vq_tokens_F,
+            audio_tokens=audio_tokens,
+            proficiency_level=level,
+            allowed_tasks="caption_script_to_motion",
+            snippet_prob=0.3,
+            min_snippet_steps=1,
+            max_snippet_steps=4,
+        )
+
+        # build_random_training_instance_salsa(
+        #     tokenizer,
+        #     leader_motion_script_segments,
+        #     follower_motion_script_segments,
+        #     leader_motion_tokens,
+        #     follower_motion_tokens,
+        #     audio_tokens,
+        #     proficiency_level,
+        #     allowed_tasks="caption_script_to_motion",
+        #     snippet_prob=0.3,
+        #     min_snippet_steps=1,
+        #     max_snippet_steps=4,
+        # )
+
+        batch_input_ids.append(torch.LongTensor(one_input_ids))
+        batch_target_ids.append(torch.LongTensor(one_target_ids))
+    input_ids = rnn.pad_sequence(batch_input_ids, batch_first=True, padding_value=tokenizer.pad_token_id)
+    target_ids = rnn.pad_sequence(batch_target_ids, batch_first=True, padding_value=-100)
+    assert input_ids.size() == target_ids.size()
+    input_ids = input_ids[:, :max_tgt_len]
+    target_ids = target_ids[:, :max_tgt_len]
+    attention_mask = input_ids.ne(tokenizer.pad_token_id)
+    assert attention_mask.size() == input_ids.size()
+    return input_ids, target_ids, attention_mask.long()
+def build_random_training_instance_salsa_prompt(
     tokenizer,
     leader_motion_script_segments,
     follower_motion_script_segments,
@@ -531,6 +591,9 @@ def build_random_training_instance_salsa(
     min_snippet_steps=1,
     max_snippet_steps=4,
 ):
+    #Todo: motion token should be in str format.
+    # It means that we need to have something like 'motion_0'
+
     all_tasks = [
         "caption_script_to_motion",
         "caption_script_audio_to_motion",
@@ -632,7 +695,13 @@ def build_random_training_instance_salsa(
         if use_audio:
             audio_section = "<AudioTokens> " + " ".join(map(str, audio_tokens)) + " </AudioTokens>\n\n"
         response_text = f"Response: <{role.capitalize()}Motion>"
-        target_tokens = motion_tokens
+        # it was for when I was using motion_tokens in LLM's tokenizer space
+        target_tokens = motion_tokens + tokenizer(f"<{role.capitalize()}Motion>")
+        # Now we have the motion tokens in the vq tokenizer space, so:
+        target_text = ' '.join([ f'<Motion_{mt}>' for mt in motion_tokens])
+        target_text += (f"</{role.capitalize()}Motion>")
+        # todo: this done, now we need to get the target_tokens from target text like:
+        target_tokens = tokenizer.tokenize(target_text)
 
     elif task == "leader_to_follower":
         instruction = "### Instruction:\nGiven leader motion (and optionally music), predict follower motion.\n\n"
@@ -754,6 +823,7 @@ def build_random_training_instance_salsa(
     input_ids.extend(target_tokens)
     target_ids.extend(target_tokens)
 
+    # Todo: we need to know whether we want to finish with </motion> or </{ROLEm}motion>
     end_token_ids = tokenizer("</Motion><eos>", add_special_tokens=False).input_ids
     input_ids.extend(end_token_ids)
     target_ids.extend(end_token_ids)

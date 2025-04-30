@@ -41,12 +41,12 @@ def train(model, train_loader, args):
 
             # caption, ms_desc_bins, audio_tokens, motion_tokens = batch
 
-            aux_info, ms_desc_L, ms_des_F, vq_tokens_L, vq_tokens_F, audio_tokens = batch
-            level = PAIR2LEVEL[(aux_info['vid'][:5]).lower()]
+            level, ms_desc_L, ms_des_F, vq_tokens_L, vq_tokens_F, audio_tokens = batch
+            # level = PAIR2LEVEL[(aux_info['vid'][:5]).lower()]
 
 
             # loss, acc, _, _ = model(caption, ms_desc_bins, audio_tokens, motion_tokens)
-            loss, acc, _, _ = model(aux_info,
+            loss, acc, _, _ = model(level,
                                     ms_desc_L, ms_des_F,
                                     vq_tokens_L, vq_tokens_F, audio_tokens)
 

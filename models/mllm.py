@@ -92,14 +92,24 @@ class MotionLLM(nn.Module):
 
 
     
-    def forward(self, aux_info, ms_desc_L, ms_des_F, vq_tokens_L, vq_tokens_F, audio_tokens):
+    def forward(self, level, ms_desc_L, ms_des_F, vq_tokens_L, vq_tokens_F, audio_tokens):
 
-        inputs_ids, targets, attention_mask = process_batch(tokenizer=self.tokenizer, 
-                                                            batch_of_captions=caption,
-                                                            max_tgt_len=900,
-                                                            batch_of_motions=motion_tokens,
-                                                            batch_of_motionscript=ms_desc_bins,
-                                                            batch_of_audio=audio_tokens)
+        # inputs_ids, targets, attention_mask = process_batch(tokenizer=self.tokenizer,
+        #                                                     batch_of_captions=caption,
+        #                                                     max_tgt_len=900,
+        #                                                     batch_of_motions=motion_tokens,
+        #                                                     batch_of_motionscript=ms_desc_bins,
+        #                                                     batch_of_audio=audio_tokens)
+        inputs_ids, targets, attention_mask = process_batch_Salsa(tokenizer=self.tokenizer,
+                                                                  batch_aux_info=level,
+                                                                  batch_ms_desc_L=ms_desc_L,
+                                                                  batch_ms_des_F=ms_des_F,
+                                                                  batch_vq_tokens_L=vq_tokens_L,
+                                                                  batch_vq_tokens_F=vq_tokens_F,
+                                                                  batch_audio_tokens=audio_tokens,
+                                                                  max_tgt_len=900)
+
+
 
         # print(inputs_ids.shape)
         # print(targets.shape)

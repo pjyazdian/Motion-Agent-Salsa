@@ -92,7 +92,8 @@ class Motion_tokenizer:
         motion = self.normalize(input_motion)
         motion = torch.from_numpy(motion).float().to(self.device).unsqueeze(0)
         motion_tokens = self.net.encode(motion).squeeze(0)
-        motion_tokens = motion_tokens + self.nb_text_tokens + 2  # reindex the motion tokens
+        # We skip the following reindex since we later use tokenizer to figure it out.
+        # motion_tokens = motion_tokens + self.nb_text_tokens + 2  # reindex the motion tokens
         # print(motion_tokens)
         return motion_tokens
 
@@ -984,8 +985,9 @@ class Salsa_Dataset(Dataset):
 
         audio_tokens = torch.from_numpy(audio_tokens).to(self.args.device)
 
+        # we need to return a one str here.
 
-        return aux_info, ms_desc_L, ms_des_F, vq_tokens_L, vq_tokens_F, audio_tokens
+        return level, '-->'.join(ms_desc_L), '-->'.join(ms_des_F), vq_tokens_L, vq_tokens_F, audio_tokens
 
     def create_similarity_dataset(self, pickle_file: str, labelstxt_file: str) -> None:
         """TODO"""
