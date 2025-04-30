@@ -540,7 +540,7 @@ def process_batch_Salsa(tokenizer, batch_aux_info, batch_ms_desc_L, batch_ms_des
         #                                                         motion_script_segments=ms_segments)
         #                                                         # audio)
         level = aux # PAIR2LEVEL[(aux['vid'][:5]).lower()]
-        one_input_ids, one_target_ids = build_random_training_instance_salsa_prompt(
+        one_input_ids, one_target_ids, task =  build_random_training_instance_salsa_prompt(
             tokenizer=tokenizer,
             leader_motion_script_segments=ms_desc_L.split('-->'),
             follower_motion_script_segments=ms_des_F.split('-->'),
@@ -554,19 +554,6 @@ def process_batch_Salsa(tokenizer, batch_aux_info, batch_ms_desc_L, batch_ms_des
             max_snippet_steps=4,
         )
 
-        # build_random_training_instance_salsa(
-        #     tokenizer,
-        #     leader_motion_script_segments,
-        #     follower_motion_script_segments,
-        #     leader_motion_tokens,
-        #     follower_motion_tokens,
-        #     audio_tokens,
-        #     proficiency_level,
-        #     allowed_tasks="caption_script_to_motion",
-        #     snippet_prob=0.3,
-        #     min_snippet_steps=1,
-        #     max_snippet_steps=4,
-        # )
 
         batch_input_ids.append(torch.LongTensor(one_input_ids))
         batch_target_ids.append(torch.LongTensor(one_target_ids))
