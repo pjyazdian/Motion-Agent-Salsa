@@ -548,7 +548,7 @@ def process_batch_Salsa(tokenizer, batch_aux_info, batch_ms_desc_L, batch_ms_des
             follower_motion_tokens=vq_tokens_F,
             audio_tokens=audio_tokens,
             proficiency_level=level,
-            allowed_tasks="caption_script_to_motion",
+            allowed_tasks=["caption_script_to_motion"],
             snippet_prob=0.3,
             min_snippet_steps=1,
             max_snippet_steps=4,
@@ -663,9 +663,6 @@ def build_random_training_instance_salsa_prompt(
     ]
     use_audio = (audio_tokens is not None) and allow_audio and (random.random() < 0.5)
 
-    input_ids, target_ids = [], []
-    input_ids.append(tokenizer.bos_token_id)
-    target_ids.append(-100)
 
     system_prompt = (
         "Below is an instruction that describes a task, paired with an input that provides further context. "
@@ -686,7 +683,12 @@ def build_random_training_instance_salsa_prompt(
         input_section = f"### Input:\n{caption}\n\n"
         motion_script_section = wrap_script(role, motion_script_segments) + "\n\n"
         response_text = f"Response: <{role.capitalize()}Motion>"
-        target_tokens = motion_tokens
+        # it was for when I was using motion_tokens in LLM's tokenizer space
+        # target_tokens = motion_tokens
+        # Now we have the motion tokens in the vq tokenizer space, so:
+        # We need to join without space in order to avoid '_' tokens
+        target_text = ''.join([f'<Motion_{mt_vq_id}>' for mt_vq_id in motion_tokens])
+        target_text += (f"</{role.capitalize()}Motion>")
 
     elif task == "caption_script_audio_to_motion":
         instruction = "### Instruction:\nGenerate a motion sequence based on description, motion script, and music.\n\n"
@@ -696,12 +698,13 @@ def build_random_training_instance_salsa_prompt(
             audio_section = "<AudioTokens> " + " ".join(map(str, audio_tokens)) + " </AudioTokens>\n\n"
         response_text = f"Response: <{role.capitalize()}Motion>"
         # it was for when I was using motion_tokens in LLM's tokenizer space
-        target_tokens = motion_tokens + tokenizer(f"<{role.capitalize()}Motion>")
+        # target_tokens = motion_tokens + tokenizer(f"</{role.capitalize()}Motion>")
         # Now we have the motion tokens in the vq tokenizer space, so:
-        target_text = ' '.join([ f'<Motion_{mt}>' for mt in motion_tokens])
+        target_text = ''.join([ f'<Motion_{mt_vq_id}>' for mt_vq_id in motion_tokens])
         target_text += (f"</{role.capitalize()}Motion>")
         # todo: this done, now we need to get the target_tokens from target text like:
-        target_tokens = tokenizer.tokenize(target_text)
+        # This goes to the next block so we ccould keep the code clean.
+        # target_tokens = tokenizer(target_text, add_special_tokens=False).input_ids
 
     elif task == "leader_to_follower":
         instruction = "### Instruction:\nGiven leader motion (and optionally music), predict follower motion.\n\n"
@@ -815,16 +818,22 @@ def build_random_training_instance_salsa_prompt(
         both = wrap_script("leader", leader_motion_script_segments) + "\n" + wrap_motion("leader", leader_motion_tokens)
         target_tokens = tokenizer(both, add_special_tokens=False).input_ids
 
+    input_ids, target_ids = [], []
+    input_ids.append(tokenizer.bos_token_id)
+    target_ids.append(-100)
+
     full_prompt = system_prompt + instruction + input_section + motion_script_section + audio_section + response_text
     prompt_token_ids = tokenizer(full_prompt, add_special_tokens=False).input_ids
-
     input_ids.extend(prompt_token_ids)
     target_ids.extend([-100] * len(prompt_token_ids))
+
+    target_tokens = tokenizer(target_text, add_special_tokens=False).input_ids
     input_ids.extend(target_tokens)
     target_ids.extend(target_tokens)
 
     # Todo: we need to know whether we want to finish with </motion> or </{ROLEm}motion>
-    end_token_ids = tokenizer("</Motion><eos>", add_special_tokens=False).input_ids
+    # end_token_ids = tokenizer("</Motion><eos>", add_special_tokens=False).input_ids
+    end_token_ids = tokenizer("<eos>", add_special_tokens=False).input_ids
     input_ids.extend(end_token_ids)
     target_ids.extend(end_token_ids)
 
