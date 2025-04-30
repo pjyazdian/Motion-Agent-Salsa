@@ -204,7 +204,7 @@ class DataPreprocessor:
         # self.ckpt_path_Autoencode: str = args.autoencoder_checkpoint
         self.motion_tokenizer = Motion_tokenizer(args)
         self.audio_tokenizer = Audio_tokenizer(args)
-
+        self.pair_dancer = True
         #Todo if args.name != "Frame_Level":
         #     self.DAE_frame_level: Tuple[argparse.Namespace, torch.nn.Module, torch.nn.MSELoss, Vocab, int] = utils.train_utils.load_checkpoint_and_model(
         #         self.ckpt_path_DAE, device,'DAE')
@@ -245,6 +245,7 @@ class DataPreprocessor:
             for clip_idx, clip in enumerate(clips):
                 self._sample_from_clip(vid, clip)
                 counter = counter + 1
+            if counter > 2: break
 
         # print number of samples
         with self.dst_lmdb_env.begin() as txn:
@@ -271,6 +272,8 @@ class DataPreprocessor:
                     index 1: A float end time.
                     index 2: A string word.
         """
+        if self.pair_dancer == True : return self._sample_from_clip_pair(vid, clip)
+
         clip_skeleton3d: np.ndarray = clip['keypoints3d']
         clip_rotmat: np.ndarray = clip['rotmat']
         clip_raw_euler_poses = clip['raw_euler_poses']
@@ -502,6 +505,321 @@ class DataPreprocessor:
         print()
 
 
+    def _sample_from_clip_pair(self, vid: str, clip: dict) -> None:
+        """Internal function to extract and write skeleton, audio and word data from provided clip.
+
+        Modifies internal state of the object (n_out_samples, n_poses, audio_sample_length).
+        #TODO
+
+        Args:
+            vid: A string representing the name or id of the clip.
+            clip: A dictionary containing the following string keys:
+                'poses': A Numpy array of pose/gesture data.
+                'audio_raw': A Numpy array of audio data.
+                'words': A list of lists. Each internal list contains 3 elements:
+                    index 0: A float start time.
+                    index 1: A float end time.
+                    index 2: A string word.
+        """
+        clip_skeleton3d_L: np.ndarray = clip['keypoints3d_L']
+        clip_rotmat_L: np.ndarray = clip['rotmat_L']
+        clip_raw_euler_poses_L = clip['raw_euler_poses_L']
+        clip_raw_trans_L = clip['raw_trans_L']
+
+        clip_skeleton3d_F: np.ndarray = clip['keypoints3d_F']
+        clip_rotmat_F: np.ndarray = clip['rotmat_F']
+        clip_raw_euler_poses_F = clip['raw_euler_poses_F']
+        clip_raw_trans_F = clip['raw_trans_F']
+
+        clip_audio_raw, clip_audio_raw_sr = clip['audio_raw'], clip['audio_sr']
+        clip_audio_raw, clip_audio_raw_sr = self.audio_tokenizer.normalize(torch.from_numpy(clip_audio_raw),
+                                                                           clip_audio_raw_sr)
+
+        # clip_word_list: list[list] = clip['words']
+        clip_HM3D_joint_vec_L = clip['HML3D_joints_vec_L']
+        clip_HM3D_joint_vec_F = clip['HML3D_joints_vec_F']
+
+        clipt_body_betas = clip['body_betas']
+        clip_body_vertices = clip['body_vertices']
+        clip_body_faces = clip['body_faces']
+
+        # divide
+        aux_info = []
+
+
+
+        # Leader's sample list
+        sample_skeleton3d_list_L = []
+        sample_rotmat_list_L = []
+        sample_vqtokens_list_L = []
+        sample_ms_description_list_L = []
+
+        # Follower's sample list
+        sample_skeleton3d_list_F = []
+        sample_rotmat_list_F = []
+        sample_vqtokens_list_F = []
+        sample_ms_description_list_F = []
+
+        # sample_audio_list_mels = []
+        sample_audio_raw_list = []
+        sample_audio_tokens_list = []
+
+
+        # sentence_leve_latents_list = []
+        # # GPT_3_STR_list = []
+        # # GPT_3_Embedding_list = []
+
+        # if self.sentence_level:
+        #     self.n_poses = self.sentence_frame_length
+        #     self.audio_sample_length = int(self.n_poses / self.skeleton_resampling_fps * self.audio_sampling_rate)
+
+        self.audio_sample_length = int(self.n_poses / self.skeleton_resampling_fps * self.audio_sampling_rate)
+
+        num_subdivision = math.floor(
+            (len(clip_skeleton3d_L) - self.n_poses)
+            / self.subdivision_stride) + 1  # floor((K - (N+M)) / S) + 1
+
+        # Sentence level preparation:
+
+
+
+
+        for i in tqdm(range(num_subdivision)):
+
+            if i>2:break
+
+            start_idx = i * self.subdivision_stride
+            fin_idx = start_idx + self.n_poses
+            if fin_idx>=len(clip_skeleton3d_L):
+                print("^^^^^^1")
+                continue
+            # Leader's
+            sample_skeletons3d_L = clip_skeleton3d_L[start_idx:fin_idx]
+            sample_rotmat_L = clip_rotmat_L[start_idx:fin_idx]
+            sample_HML3D_joints_vec_L =  clip_HM3D_joint_vec_L[start_idx:fin_idx]
+            sample_vqtokens_L = self.motion_tokenizer.npy263_tokenizer(sample_HML3D_joints_vec_L)
+            sample_vqtokens_L = sample_vqtokens_L.cpu().detach().numpy()
+            sample_raw_euler_poses_L = clip_raw_euler_poses_L[start_idx:fin_idx]
+            sample_raw_trans_L = clip_raw_trans_L[start_idx:fin_idx]
+
+            # Follower's
+            sample_skeletons3d_F = clip_skeleton3d_F[start_idx:fin_idx]
+            sample_rotmat_F = clip_rotmat_F[start_idx:fin_idx]
+            sample_HML3D_joints_vec_F =  clip_HM3D_joint_vec_F[start_idx:fin_idx]
+            sample_vqtokens_F = self.motion_tokenizer.npy263_tokenizer(sample_HML3D_joints_vec_F)
+            sample_vqtokens_F = sample_vqtokens_F.cpu().detach().numpy()
+            sample_raw_euler_poses_F = clip_raw_euler_poses_F[start_idx:fin_idx]
+            sample_raw_trans_F = clip_raw_trans_F[start_idx:fin_idx]
+
+
+            sample_body_betas = None # clipt_body_betas
+            sample_body_vertices = None # clip_body_vertices[start_idx:fin_idx]
+            sample_body_faces = None # clip_body_faces
+
+            # from MotionScript.stmc_renderer.humor import HumorRenderer
+            # smpl_renderer = HumorRenderer(20, imw=720, imh=720)
+            # from smplx import SMPLX
+            # smplx = SMPLX(model_path='utils\\salsa_utils\\SMPLX_DEP\\models_lockedhead\\smplx',
+            #               gender="NEUTRAL",
+            #               num_betas=16, use_pca=False, use_face_contour=True, flat_hand_mean=True)
+            #
+            # data = {'poses':  sample_raw_euler_poses}
+            # data['trans'] = sample_raw_trans
+            # itself = smplx.forward(
+            #     # global_orient=torch.from_numpy(data['global_orient']).float(),
+            #
+            #     global_orient=torch.from_numpy(data['poses'][:, :3], ).float(),
+            #     body_pose=torch.from_numpy(data['poses'][:, 3:66]).float(),
+            #
+            #     transl=torch.from_numpy(data['trans']).float()
+            # )
+            # smpl_renderer(
+            #     sample_HML3D_joints_vec.copy(),
+            #     output='smpl_video_path.mp4',
+            #     progress_bar=tqdm,
+            # )
+
+            # S, T = 80, 140
+            S, T = 0, -1
+            ablation = ['chronological']
+
+            # Leader's
+            input2MotionScript = {
+                                'poses': sample_raw_euler_poses_L[S:T].copy(),
+                                '3d_keypoints': sample_skeletons3d_L[S:T],
+                                'trans': sample_raw_trans_L[S:T],
+                                'body_betas': None,         # sample_body_betas,
+                                'body_vertices':   None,    # sample_body_vertices[S:T],
+                                'body_faces': None          # sample_body_faces
+                                }
+
+
+            bining_details_printout, ms_non_agg_L, ms_agg_L, s, e  = \
+                MS_Salsa.MotionScript_Forward_Salsa(input2MotionScript,
+                                                motion_id=f'Win_{i}',
+                                                ablations=ablation)
+            sample_bin_ms_L = ms_agg_L # We pick the simples plain textual rep (non-aggregated).
+
+            # Follower's
+            input2MotionScript = {
+                'poses': sample_raw_euler_poses_F[S:T].copy(),
+                '3d_keypoints': sample_skeletons3d_F[S:T],
+                'trans': sample_raw_trans_F[S:T],
+                'body_betas': None,  # sample_body_betas,
+                'body_vertices': None,  # sample_body_vertices[S:T],
+                'body_faces': None  # sample_body_faces
+            }
+            bining_details_printout, ms_non_agg_F, ms_agg_F, s, e = \
+                MS_Salsa.MotionScript_Forward_Salsa(input2MotionScript,
+                                                    motion_id=f'Win_{i}',
+                                                    ablations=ablation)
+
+            sample_bin_ms_F = ms_agg_F
+            # We pick the simples plain
+            # textual rep (non-aggregated through time by setting max_range to zerp).
+
+
+            # import importlib
+            # importlib.reload(MS_Salsa)
+
+
+            subdivision_start_time = start_idx / self.skeleton_resampling_fps
+            subdivision_end_time = fin_idx / self.skeleton_resampling_fps
+            # sample_words = self.get_words_in_time_range(word_list=clip_word_list,
+            #                                             start_time=subdivision_start_time,
+            #                                             end_time=subdivision_end_time)
+
+            # if len(sample_words) < 4:
+            #     continue
+
+            # raw audio
+            audio_start = math.floor(start_idx / len(clip_skeleton3d_L) * len(clip_audio_raw[0]))
+            audio_end = audio_start + self.audio_sample_length
+            sample_audio = clip_audio_raw[:, audio_start:audio_end]
+            sample_audiotokens = self.audio_tokenizer.tokenize(sample_audio)
+            sample_audiotokens = sample_audiotokens.squeeze().cpu().numpy()
+            # mel_chunks = []
+            # raw_chunks = []
+            # for audio_sub in range(self.audio_sample_length//self.audio_sampling_rate):
+            #     audio_chunk = sample_audio[audio_sub*self.audio_sampling_rate: (audio_sub+1)*self.audio_sampling_rate]
+            #     signal = librosa.feature.melspectrogram(y=audio_chunk, sr=self.audio_sampling_rate)
+            #     signal = librosa.power_to_db(signal, ref=np.max)
+            #     mel_chunks.append(signal)
+            #     # raw_chunks.append(audio_chunk)
+            #     raw_chunks.append(0)
+            #     # signal = librosa.amplitude_to_db(signal)
+
+
+            # Extract dance moves labels
+
+            motion_info = {'vid': vid,
+                           'start_frame_no': start_idx,
+                           'end_frame_no': fin_idx,
+                           'start_time': subdivision_start_time,
+                           'end_time': subdivision_end_time}
+
+            def get_dance_moves(motion_info_x):
+                DD_vid = motion_info_x['vid']
+                get_moves = []
+                current_take = DD_vid  # [:15]
+                current_role = 'Follower' if 'follower' in DD_vid else 'Leader'
+                current_start_time, current_end_time = motion_info_x['start_time'], motion_info_x['end_time']
+
+                def time2seconds(timestamp):
+                    from datetime import datetime
+                    # timestamp = "00:00:00.000"
+                    time_obj = datetime.strptime(timestamp, "%H:%M:%S.%f")  # Parses timestamp
+                    total_seconds = time_obj.hour * 3600 + time_obj.minute * 60 + time_obj.second + time_obj.microsecond / 1e6
+                    return total_seconds
+
+                # for i in range(len(self.Dance_moves_annot)):
+                #     temp = self.Dance_moves_annot[i]
+                #     if temp['ID'] in current_take and \
+                #             current_role in temp['role']:
+                #
+                #         # print(temp['role'])
+                #         if current_start_time >= time2seconds(temp['start_time']) and current_end_time <= time2seconds(
+                #                 temp['end_time']):
+                #             get_moves.append(self.Dance_moves_annot[i])
+                for i in range(len(self.Dance_moves_annot)):
+                    temp = self.Dance_moves_annot[i]
+                    if temp['ID'] in current_take and current_role in temp['role']:
+                        move_start_time = time2seconds(temp['start_time'])
+                        move_end_time = time2seconds(temp['end_time'])
+                        move_duration = move_end_time - move_start_time
+                        overlap_start = max(current_start_time, move_start_time)
+                        overlap_end = min(current_end_time, move_end_time)
+
+                        if overlap_end > overlap_start:  # Check if there is an overlap
+                            overlap_duration = overlap_end - overlap_start
+                            overlap_percentage = overlap_duration / move_duration
+
+                            if overlap_percentage > 0.6:  # Check if overlap is more than 60%
+                                get_moves.append(self.Dance_moves_annot[i])
+                return get_moves
+
+            # dance_moves = get_dance_moves(motion_info)
+            # motion_info['dance_moves'] = dance_moves
+
+
+            # Leader's
+            sample_skeleton3d_list_L.append(sample_skeletons3d_L)
+            sample_rotmat_list_L.append(sample_rotmat_L)
+            sample_vqtokens_list_L.append(sample_vqtokens_L)
+            sample_ms_description_list_L.append(sample_bin_ms_L)
+
+            # Follower's
+            sample_skeleton3d_list_F.append(sample_skeletons3d_F)
+            sample_rotmat_list_F.append(sample_rotmat_F)
+            sample_vqtokens_list_F.append(sample_vqtokens_F)
+            sample_ms_description_list_F.append(sample_bin_ms_F)
+
+            sample_audio_tokens_list.append(sample_audiotokens)
+
+
+            # sample_words_list.append(sample_words)
+            # sample_audio_list_mels.append(mel_chunks)
+            # sample_audio_list_raws.append(raw_chunks)
+
+            aux_info.append(motion_info)
+
+
+
+        if len(sample_skeleton3d_list_L) > 0:
+            # with ((((self.dst_lmdb_env.begin(write=True) as txn)))):
+            with (self.dst_lmdb_env.begin(write=True) as txn):
+                for poses_keypoints3d_L, poses_keypoints3d_F, \
+                    poses_rotmat_L, poses_rotmat_F, \
+                    ms_description_L, ms_description_F, \
+                    poses_vq_tokens_L, poses_vq_tokens_F, \
+                     audio_tokens, aux in \
+                        zip(sample_skeleton3d_list_L, sample_skeleton3d_list_F,
+                            sample_rotmat_list_L, sample_rotmat_list_F,
+                            sample_ms_description_list_L, sample_ms_description_list_F,
+                            sample_vqtokens_list_L, sample_vqtokens_list_F,
+                            sample_audio_tokens_list, aux_info):
+
+                    poses_keypoints3d_L = np.asarray(poses_keypoints3d_L)
+                    poses_rotmat_L = np.asarray(poses_rotmat_L)
+                    poses_vqtokens_L = np.asarray(poses_vq_tokens_L)
+
+                    poses_keypoints3d_F = np.asarray(poses_keypoints3d_F)
+                    poses_rotmat_F = np.asarray(poses_rotmat_F)
+                    poses_vqtokens_F = np.asarray(poses_vq_tokens_F)
+
+                    audio_tokens = np.asarray(audio_tokens)
+                    # GPT_3_Embedding = np.array(GPT_3_Embedding)
+                    # save
+                    k = '{:010}'.format(self.n_out_samples).encode('ascii')
+                    v = [poses_keypoints3d_L, poses_rotmat_L, ms_description_L, poses_vqtokens_L,
+                         poses_keypoints3d_F, poses_rotmat_F, ms_description_F, poses_vqtokens_F,
+                         audio_tokens, aux]
+                    # v = [words, poses, audio_raws, audio_mels, aux, sentence_leve_latents, GPT_3_Embedding]
+                    v = pyarrow.serialize(v).to_buffer()
+                    txn.put(k, v)
+                    self.n_out_samples += 1
+
+        print()
 
 # Todo -----------------------------------------------------------------
 PAIR2LEVEL = {
@@ -597,7 +915,7 @@ class Salsa_Dataset(Dataset):
 
         print("Reading data '{}'...".format(lmdb_dir))
         preloaded_dir = lmdb_dir + "_cache"
-        if not os.path.exists(preloaded_dir):
+        if not os.path.exists(preloaded_dir): # TODO
             data_sampler = DataPreprocessor(
                 args,
                 lmdb_dir,
@@ -648,10 +966,17 @@ class Salsa_Dataset(Dataset):
             # word_seq, pose_seq, audio, aux_info = sample
 
             # pose_seq_keypoints3d, pose_seq_rotmat, vq_tokens, aux_info = sample
-            pose_seq_keypoints3d, pose_seq_rotmat, ms_desc_bins, vq_tokens, audio_tokens, aux_info = sample
-        vq_tokens = torch.from_numpy(vq_tokens).to(self.args.device)
+            # pose_seq_keypoints3d, pose_seq_rotmat, ms_desc_bins, vq_tokens, audio_tokens, aux_info = sample
+
+            poses_keypoints3d_L, poses_rotmat_L, ms_desc_L, vq_tokens_L, \
+             poses_keypoints3d_F, poses_rotmat_F, ms_des_F, vq_tokens_F, \
+             audio_tokens, aux_info = sample
+
+        vq_tokens_L = torch.from_numpy(vq_tokens_L).to(self.args.device)
+        vq_tokens_F = torch.from_numpy(vq_tokens_F).to(self.args.device)
+
         # Todo: this VQ_tokens are already transfered to LLM space (nb_llm_tokens+2 was addded)
-        # Todo: consider add the second dancer
+        # Todo: consider add the second dancer ---- Done!
         # Todo: Now we need to call the prompt function.
 
         level = PAIR2LEVEL[(aux_info['vid'][:5]).lower()]
@@ -660,7 +985,7 @@ class Salsa_Dataset(Dataset):
         audio_tokens = torch.from_numpy(audio_tokens).to(self.args.device)
 
 
-        return caption, ms_desc_bins, audio_tokens, vq_tokens
+        return aux_info, ms_desc_L, ms_des_F, vq_tokens_L, vq_tokens_F, audio_tokens
 
     def create_similarity_dataset(self, pickle_file: str, labelstxt_file: str) -> None:
         """TODO"""

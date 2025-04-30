@@ -987,8 +987,10 @@ PROXIMITY_MOTIONCODES = [
     ### SEMANTIC: HOW CLOSE ARE SYMMETRIC BODY PARTS?           ---MOdified based on statistical analysis
     [('left_elbow', 'right_elbow'), None,
         # Spatial
-        ["significant_closing", "moderate_closing", "moderate_spreading", "significant_spreading"],
-        ["significant_closing", "significant_spreading"],
+        # ["significant_closing", "moderate_closing", "moderate_spreading", "significant_spreading"],
+        ["significant_closing", "significant_spreading"],    # Adjusted for Salsa
+        # ["significant_closing", "significant_spreading"],
+        [], # Adjusted for Salsa
         [], # [], #[('moderate_closing', 1), ('moderate_spreading', 1)],
 
         # Temporal
@@ -1001,7 +1003,8 @@ PROXIMITY_MOTIONCODES = [
     [('left_hand', 'right_hand'), None,
             # Spatial
             ["significant_closing", "significant_spreading"],
-            ["significant_closing", "significant_spreading"],
+            # ["significant_closing", "significant_spreading"], # Adjusted for Salsa
+            [],
             [], # [('moderate_closing', 1), ('moderate_spreading', 1)],
 
             # Temporal
@@ -1010,36 +1013,37 @@ PROXIMITY_MOTIONCODES = [
             [('fast', 2), ('very_fast', 2)],  # Supports
             ], # hands
 
-    [('left_knee', 'right_knee'), None,
-            # Spatial
-            ["significant_closing", "significant_spreading"],
-            ["significant_closing", "significant_spreading"],
-            [], # [('moderate_closing', 1), ('moderate_spreading', 1)],
-            # Temporal
-            ['moderate', 'fast', 'very_fast'],  # acceptable / eligibility
-            ['fast', 'very_fast'],  # Rare
-            [('fast', 2), ('very_fast', 2)],  # Supports
-    ], # knees
+    # [('left_knee', 'right_knee'), None,
+    #         # Spatial
+    #         ["significant_closing", "significant_spreading"],
+    #         [], #Adjusted for Salsa
+    #         [], # [('moderate_closing', 1), ('moderate_spreading', 1)],
+    #         # Temporal
+    #         ['moderate', 'fast', 'very_fast'],  # acceptable / eligibility
+    #         ['fast', 'very_fast'],  # Rare
+    #         [('fast', 2), ('very_fast', 2)],  # Supports
+    # ], # knees
 
 
-    [('left_foot', 'right_foot'), None,
-
-        # Spatial
-        ["significant_closing", "significant_spreading"],
-        [], # ["significant_closing", "significant_spreading"],
-        [], # [('moderate_closing', 1), ('moderate_spreading', 1)],
-
-        # Temporal
-        ['moderate', 'fast', 'very_fast'],  # acceptable / eligibility
-        ['fast', 'very_fast'],  # Rare
-        [('fast', 2), ('very_fast', 2)],  # Supports
-    ], # feet
+    # [('left_foot', 'right_foot'), None,
+    #
+    #     # Spatial
+    #     ["significant_closing", "significant_spreading"],
+    #     [], # ["significant_closing", "significant_spreading"],
+    #     [], # [('moderate_closing', 1), ('moderate_spreading', 1)],
+    #
+    #     # Temporal
+    #     ['moderate', 'fast', 'very_fast'],  # acceptable / eligibility
+    #     ['fast', 'very_fast'],  # Rare
+    #     [('fast', 2), ('very_fast', 2)],  # Supports
+    # ], # feet
 
         # #********************XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX*********************
         # ### SEMANTIC: WHAT ARE THE HANDS CLOSE TO?
     [('left_hand', 'left_shoulder'), 'left_hand',
         # Spatial
-        ["significant_closing", "moderate_closing", "moderate_spreading", "significant_spreading"],
+        # ["significant_closing", "moderate_closing", "moderate_spreading", "significant_spreading"],
+        ["significant_closing", "significant_spreading"],
         [],
         [],
 
@@ -1051,8 +1055,8 @@ PROXIMITY_MOTIONCODES = [
 
     [('left_hand', 'right_shoulder'), 'left_hand',
          # Spatial
-         ["significant_closing", "moderate_closing", "moderate_spreading", "significant_spreading"],
          ["significant_closing", "significant_spreading"],
+         [],
          [],
 
          # Temporal
@@ -1063,8 +1067,8 @@ PROXIMITY_MOTIONCODES = [
 
     [('right_hand', 'right_shoulder'), 'right_hand',
         # Spatial
-        ["significant_closing", "moderate_closing", "moderate_spreading", "significant_spreading"],
         ["significant_closing", "significant_spreading"],
+        [],
         [],
 
         # Temporal
@@ -1075,73 +1079,6 @@ PROXIMITY_MOTIONCODES = [
 
     [('right_hand', 'left_shoulder'), 'right_hand',
         # Spatial
-        ["significant_closing", "moderate_closing", "moderate_spreading", "significant_spreading"],
-        ["significant_closing", "significant_spreading"],
-        [],
-
-        # Temporal
-        ['moderate', 'fast', 'very_fast'],  # acceptable / eligibility
-        ['fast', 'very_fast'],  # Rare
-        [('fast', 2), ('very_fast', 2)],  # Supports
-    ], # ... RL
-    [('left_hand', 'right_elbow'), 'left_hand',
-        # Spatial
-        ["significant_closing", "moderate_closing", "moderate_spreading", "significant_spreading"],
-        ["significant_closing", "significant_spreading"],
-        [],
-
-        # Temporal
-        ['moderate', 'fast', 'very_fast'],  # acceptable / eligibility
-        ['fast', 'very_fast'],  # Rare
-        [('fast', 2), ('very_fast', 2)],  # Supports
-    ], # hand/elbow LR (NOTE: LL & RR are impossible)
-
-    [('right_hand', 'left_elbow'), 'right_hand',
-         # Spatial
-         ["significant_closing", "moderate_closing", "moderate_spreading", "significant_spreading"],
-         ["significant_closing", "significant_spreading"],
-         [],
-
-         # Temporal
-         ['moderate', 'fast', 'very_fast'],  # acceptable / eligibility
-         ['fast', 'very_fast'],  # Rare
-         [('fast', 2), ('very_fast', 2)],  # Supports
-    ], # ... RL
-    [('left_hand', 'left_knee'), 'left_hand',
-        # Spatial
-        ["significant_closing", "significant_spreading"],
-        [],
-        [],
-
-        # Temporal
-        ['moderate', 'fast', 'very_fast'],  # acceptable / eligibility
-        ['fast', 'very_fast'],  # Rare
-        [('fast', 2), ('very_fast', 2)],  # Supports
-    ], # hand/knee... LL
-    [('left_hand', 'right_knee'), 'left_hand',
-        # Spatial
-        ["significant_closing", "significant_spreading"],
-        [],
-        [],
-
-        # Temporal
-        ['moderate', 'fast', 'very_fast'],  # acceptable / eligibility
-        ['fast', 'very_fast'],  # Rare
-        [('fast', 2), ('very_fast', 2)],  # Supports
-    ], # ... LR
-    [('right_hand', 'right_knee'), 'right_hand',
-        # Spatial
-        ["significant_closing", "significant_spreading"],
-        [],
-        [],
-
-        # Temporal
-        ['moderate', 'fast', 'very_fast'],  # acceptable / eligibility
-        ['fast', 'very_fast'],  # Rare
-        [('fast', 2), ('very_fast', 2)],  # Supports
-    ], # ... RR
-    [('right_hand', 'left_knee'), 'right_hand',
-        # Spatial
         ["significant_closing", "significant_spreading"],
         [],
         [],
@@ -1151,94 +1088,166 @@ PROXIMITY_MOTIONCODES = [
         ['fast', 'very_fast'],  # Rare
         [('fast', 2), ('very_fast', 2)],  # Supports
     ], # ... RL
-    [('left_hand', 'left_ankle'), 'left_hand',
-        # Spatial
-        ["significant_closing","significant_spreading"],
-        [],
-        [],
+    # [('left_hand', 'right_elbow'), 'left_hand',
+    #     # Spatial
+    #
+    #     # ["significant_closing", "moderate_closing", "moderate_spreading", "significant_spreading"],
+    #     # ["significant_closing", "significant_spreading"],
+    #     [],
+    #     [],
+    #     [],
+    #
+    #     # Temporal
+    #     ['moderate', 'fast', 'very_fast'],  # acceptable / eligibility
+    #     ['fast', 'very_fast'],  # Rare
+    #     [('fast', 2), ('very_fast', 2)],  # Supports
+    # ], # hand/elbow LR (NOTE: LL & RR are impossible)
 
-        # Temporal
-        ['moderate', 'fast', 'very_fast'],  # acceptable / eligibility
-        ['fast', 'very_fast'],  # Rare
-        [('fast', 2), ('very_fast', 2)],  # Supports
-    ], # hand/ankle... LL
-    [('left_hand', 'right_ankle'), 'left_hand',
-        # Spatial
-        ["significant_closing", "significant_spreading"],
-        [],
-        [],
-
-        # Temporal
-        ['moderate', 'fast', 'very_fast'],  # acceptable / eligibility
-        ['fast', 'very_fast'],  # Rare
-        [('fast', 2), ('very_fast', 2)],  # Supports
-    ], # ... LR
-    [('right_hand', 'right_ankle'), 'right_hand',
-        # Spatial
-        ["significant_closing", "significant_spreading"],
-        [],
-        [],
-
-        # Temporal
-        ['moderate', 'fast', 'very_fast'],  # acceptable / eligibility
-        ['fast', 'very_fast'],  # Rare
-        [('fast', 2), ('very_fast', 2)],  # Supports
-    ], # ... RR
-    [('right_hand', 'left_ankle'), 'right_hand',
-        # Spatial
-        ["significant_closing", "significant_spreading"],
-        [],
-        [],
-
-        # Temporal
-        ['moderate', 'fast', 'very_fast'],  # acceptable / eligibility
-        ['fast', 'very_fast'],  # Rare
-        [('fast', 2), ('very_fast', 2)],  # Supports
-    ], # ... RL
-    [('left_hand', 'left_foot'), 'left_hand',
-        # Spatial
-        ["significant_closing", "moderate_closing", "moderate_spreading", "significant_spreading"],
-        ["significant_closing", "significant_spreading"],
-        [],
-
-        # Temporal
-        ['moderate', 'fast', 'very_fast'],  # acceptable / eligibility
-        ['fast', 'very_fast'],  # Rare
-        [('fast', 2), ('very_fast', 2)],  # Supports
-    ], # hand/foot... LL
-    [('left_hand', 'right_foot'), 'left_hand',
-        # Spatial
-        ["significant_closing", "moderate_closing", "moderate_spreading", "significant_spreading"],
-        ["significant_closing", "significant_spreading"],
-        [],
-
-        # Temporal
-        ['moderate', 'fast', 'very_fast'],  # acceptable / eligibility
-        ['fast', 'very_fast'],  # Rare
-        [('fast', 2), ('very_fast', 2)],  # Supports
-    ], # ... LR
-    [('right_hand', 'right_foot'), 'right_hand',
-        # Spatial
-        ["significant_closing", "moderate_closing", "moderate_spreading", "significant_spreading"],
-        ["significant_closing", "significant_spreading"],
-        [],
-
-        # Temporal
-        ['moderate', 'fast', 'very_fast'],  # acceptable / eligibility
-        ['fast', 'very_fast'],  # Rare
-        [('fast', 2), ('very_fast', 2)],  # Supports
-    ], # ... RR
-    [('right_hand', 'left_foot'), 'right_hand',
-        # Spatial
-        ["significant_closing", "moderate_closing", "moderate_spreading", "significant_spreading"],
-        ["significant_closing", "significant_spreading"],
-        [],
-
-        # Temporal
-        ['moderate', 'fast', 'very_fast'],  # acceptable / eligibility
-        ['fast', 'very_fast'],  # Rare
-        [('fast', 2), ('very_fast', 2)],  # Supports
-    ] # ... RL
+    # [('right_hand', 'left_elbow'), 'right_hand',
+    #      # Spatial
+    #      # ["significant_closing", "moderate_closing", "moderate_spreading", "significant_spreading"],
+    #      # ["significant_closing", "significant_spreading"],
+    #      [],
+    #      [],
+    #      [],
+    #
+    #      # Temporal
+    #      ['moderate', 'fast', 'very_fast'],  # acceptable / eligibility
+    #      ['fast', 'very_fast'],  # Rare
+    #      [('fast', 2), ('very_fast', 2)],  # Supports
+    # ], # ... RL
+    # [('left_hand', 'left_knee'), 'left_hand',
+    #     # Spatial
+    #     [],
+    #     [],
+    #     [],
+    #
+    #     # Temporal
+    #     ['moderate', 'fast', 'very_fast'],  # acceptable / eligibility
+    #     ['fast', 'very_fast'],  # Rare
+    #     [('fast', 2), ('very_fast', 2)],  # Supports
+    # ], # hand/knee... LL
+    # [('left_hand', 'right_knee'), 'left_hand',
+    #     # Spatial
+    #     [],
+    #     [],
+    #     [],
+    #
+    #     # Temporal
+    #     ['moderate', 'fast', 'very_fast'],  # acceptable / eligibility
+    #     ['fast', 'very_fast'],  # Rare
+    #     [('fast', 2), ('very_fast', 2)],  # Supports
+    # ], # ... LR
+    # [('right_hand', 'right_knee'), 'right_hand',
+    #     # Spatial
+    #     [],
+    #     [],
+    #     [],
+    #
+    #     # Temporal
+    #     ['moderate', 'fast', 'very_fast'],  # acceptable / eligibility
+    #     ['fast', 'very_fast'],  # Rare
+    #     [('fast', 2), ('very_fast', 2)],  # Supports
+    # ], # ... RR
+    # [('right_hand', 'left_knee'), 'right_hand',
+    #     # Spatial
+    #     [],
+    #     [],
+    #     [],
+    #
+    #     # Temporal
+    #     ['moderate', 'fast', 'very_fast'],  # acceptable / eligibility
+    #     ['fast', 'very_fast'],  # Rare
+    #     [('fast', 2), ('very_fast', 2)],  # Supports
+    # ], # ... RL
+    # [('left_hand', 'left_ankle'), 'left_hand',
+    #     # Spatial
+    #     [],
+    #     [],
+    #     [],
+    #
+    #     # Temporal
+    #     ['moderate', 'fast', 'very_fast'],  # acceptable / eligibility
+    #     ['fast', 'very_fast'],  # Rare
+    #     [('fast', 2), ('very_fast', 2)],  # Supports
+    # ], # hand/ankle... LL
+    # [('left_hand', 'right_ankle'), 'left_hand',
+    #     # Spatial
+    #     [],
+    #     [],
+    #     [],
+    #
+    #     # Temporal
+    #     ['moderate', 'fast', 'very_fast'],  # acceptable / eligibility
+    #     ['fast', 'very_fast'],  # Rare
+    #     [('fast', 2), ('very_fast', 2)],  # Supports
+    # ], # ... LR
+    # [('right_hand', 'right_ankle'), 'right_hand',
+    #     # Spatial
+    #     [],
+    #     [],
+    #     [],
+    #
+    #     # Temporal
+    #     ['moderate', 'fast', 'very_fast'],  # acceptable / eligibility
+    #     ['fast', 'very_fast'],  # Rare
+    #     [('fast', 2), ('very_fast', 2)],  # Supports
+    # ], # ... RR
+    # [('right_hand', 'left_ankle'), 'right_hand',
+    #     # Spatial
+    #     [],
+    #     [],
+    #     [],
+    #
+    #     # Temporal
+    #     ['moderate', 'fast', 'very_fast'],  # acceptable / eligibility
+    #     ['fast', 'very_fast'],  # Rare
+    #     [('fast', 2), ('very_fast', 2)],  # Supports
+    # ], # ... RL
+    # [('left_hand', 'left_foot'), 'left_hand',
+    #     # Spatial
+    #     [],
+    #     [],
+    #     [],
+    #
+    #     # Temporal
+    #     ['moderate', 'fast', 'very_fast'],  # acceptable / eligibility
+    #     ['fast', 'very_fast'],  # Rare
+    #     [('fast', 2), ('very_fast', 2)],  # Supports
+    # ], # hand/foot... LL
+    # [('left_hand', 'right_foot'), 'left_hand',
+    #     # Spatial
+    #     [],
+    #     [],
+    #     [],
+    #
+    #     # Temporal
+    #     ['moderate', 'fast', 'very_fast'],  # acceptable / eligibility
+    #     ['fast', 'very_fast'],  # Rare
+    #     [('fast', 2), ('very_fast', 2)],  # Supports
+    # ], # ... LR
+    # [('right_hand', 'right_foot'), 'right_hand',
+    #     # Spatial
+    #     [],
+    #     [],
+    #     [],
+    #
+    #     # Temporal
+    #     ['moderate', 'fast', 'very_fast'],  # acceptable / eligibility
+    #     ['fast', 'very_fast'],  # Rare
+    #     [('fast', 2), ('very_fast', 2)],  # Supports
+    # ], # ... RR
+    # [('right_hand', 'left_foot'), 'right_hand',
+    #     # Spatial
+    #     [],
+    #     [],
+    #     [],
+    #
+    #     # Temporal
+    #     ['moderate', 'fast', 'very_fast'],  # acceptable / eligibility
+    #     ['fast', 'very_fast'],  # Rare
+    #     [('fast', 2), ('very_fast', 2)],  # Supports
+    # ] # ... RL
 ]
 
 ROTATION_MOTIONCODES = [

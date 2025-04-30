@@ -92,7 +92,7 @@ class MotionLLM(nn.Module):
 
 
     
-    def forward(self, caption, ms_desc_bins, audio_tokens, motion_tokens):
+    def forward(self, aux_info, ms_desc_L, ms_des_F, vq_tokens_L, vq_tokens_F, audio_tokens):
 
         inputs_ids, targets, attention_mask = process_batch(tokenizer=self.tokenizer, 
                                                             batch_of_captions=caption,

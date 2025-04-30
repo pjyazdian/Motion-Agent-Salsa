@@ -12,6 +12,11 @@ def print_model_stats(model):
     print(f"Total parameters: {total_params:,}")
     print(f"Trainable parameters: {trainable_params:,} ---- %{(100*(trainable_params/total_params)):.2f}")
 
+PAIR2LEVEL = {
+    f"pair{i}": level
+    for i, level in zip(range(1, 10), ["beginner", "intermediate", "professional"] * 3)
+}
+
 def train(model, train_loader, args):
     model.train()
 
@@ -34,9 +39,17 @@ def train(model, train_loader, args):
         for batch in pbar:
             # caption, motion = batch[0], batch[1]  # assumes your custom DataLoader outputs this
 
-            caption, ms_desc_bins, audio_tokens, motion_tokens = batch
+            # caption, ms_desc_bins, audio_tokens, motion_tokens = batch
 
-            loss, acc, _, _ = model(caption, ms_desc_bins, audio_tokens, motion_tokens)
+            aux_info, ms_desc_L, ms_des_F, vq_tokens_L, vq_tokens_F, audio_tokens = batch
+            level = PAIR2LEVEL[(aux_info['vid'][:5]).lower()]
+
+
+            # loss, acc, _, _ = model(caption, ms_desc_bins, audio_tokens, motion_tokens)
+            loss, acc, _, _ = model(aux_info,
+                                    ms_desc_L, ms_des_F,
+                                    vq_tokens_L, vq_tokens_F, audio_tokens)
+
             loss.backward()
             optimizer.step()
             optimizer.zero_grad()
@@ -85,7 +98,7 @@ def main():
     # You should implement this dataset to match your caption-motion pair format
 
     train_dataset = Salsa_Dataset(args,
-                    lmdb_dir='utils/salsa_utils/Salsa_Temp/lmdb_Salsa/lmdb_train',
+                    lmdb_dir='utils/salsa_utils/Salsa_Temp/lmdb_Salsa_pair/lmdb_train',
                     n_poses=100,
                     subdivision_stride=50,
                     pose_resampling_fps=20)

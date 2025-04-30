@@ -418,6 +418,7 @@ def main(coords, save_dir, babel_info=False, simplified_captions=False,
     bin_size = int( min((thresholds[i + 1] - thresholds[i]) for i in range(len(thresholds) - 1)) * fps )
     nb_binds = int (total_frames // bin_size) + 1
     max_range_bins = (int( (TIMECODE_OPERTATOR_VALUES['ChronologicalOrder']['category_thresholds'][-1] * fps)) // bin_size) + 1
+    max_range_bins = 0 # for the salsa motionscript
     Time_Bin_Info = {'bin_size': bin_size,
                      'max_range_bins': max_range_bins,
                      'nb_binds': nb_binds,
@@ -585,7 +586,9 @@ def main(coords, save_dir, babel_info=False, simplified_captions=False,
     # 2. Interpret timecodes to classify time connections
     # 3. Skip and Format based on the eligibilities
     # 4. No Aggregation step is required.
-    motioncodes_agg_t = infer_timecodeds(motioncodes_agg, [])
+    # motioncodes_agg_t = infer_timecodeds(motioncodes_agg, [])
+    # for the salsa project
+    motioncodes_agg_t = infer_timecodeds(motioncodes_agg, ablation)
     non_agg_motioncodes_t = infer_timecodeds(non_agg_motioncodes, ablation)
     # save
     saved_filepath = os.path.join(save_dir, "posecodes_aggregated.pt")
@@ -875,6 +878,7 @@ def prepare_motioncode_queries():
         # fill in the blanks for acceptable interpretation (when defining posecodes, '[]' means that all operator interpretation are actually acceptable)
         spatial_acceptable_intptt_names = [p[2] if p[2] else MOTIONCODE_OPERATORS_VALUES[motioncode_kind]['category_names'] for p in
                                    motioncode_list]
+        # Todo: Due to this assumption, we have to comment out unnecessary queries rather than just []
         try:
             temporal_acceptable_intptt_names = []
             for p in motioncode_list:
