@@ -582,6 +582,7 @@ def build_random_training_instance_salsa_prompt(
     # It means that we need to have something like 'motion_0'
 
     all_tasks = [
+        "caption_to_motion",
         "caption_script_to_motion",
         "caption_script_audio_to_motion",
         "leader_to_follower",
@@ -590,14 +591,6 @@ def build_random_training_instance_salsa_prompt(
         "caption_audio_to_motionscript",
         "motionscript_to_motion",
         "motion_to_motionscript",
-        "snippet_script_to_motion",
-        "snippet_motion_to_script",
-        "leader_motion_script_to_follower_script",
-        "follower_motion_script_to_leader_script",
-        "leader_script_to_leader_motion",
-        "follower_script_to_follower_motion",
-        "leader_motion_script_to_follower_script_motion",
-        "follower_motion_script_to_leader_script_motion",
     ]
 
     task = random.choice(allowed_tasks if allowed_tasks else all_tasks)
@@ -657,159 +650,197 @@ def build_random_training_instance_salsa_prompt(
     )
 
     def wrap_script(role, script):
-        return f"<{role.capitalize()}Script> {format_motionscript_bins(script)} </{role.capitalize()}Script>"
+        return f"### Script:\n<{role.capitalize()}Script> {format_motionscript_bins(script)} </{role.capitalize()}Script>"
+    def wrap_audio(audio_tokenz):
+        return "### Audio:\n<AudioTokens> " + \
+                            ''.join([ f'<Audio_{tok}>' for tok in audio_tokenz]) + \
+                            " </AudioTokens>\n\n"
 
-    def wrap_motion(role, tokens):
-        return f"<{role.capitalize()}Motion> {' '.join(map(str, tokens))} </{role.capitalize()}Motion>"
 
-    instruction = input_section = motion_script_section = audio_section = response_text = ""
-    target_tokens = []
+
+
+
+
+    if task == "caption_to_motion":
+        instruction = "### Instruction:\nGenerate a motion sequence based on the description.\n\n"
+        input_section = f"### Input:\n{caption}\n\n"
+        response_text = f"Response: <{role.capitalize()}Motion>"
+        # it was for when I was using motion_tokens in LLM's tokenizer space
+        # target_tokens = motion_tokens
+        # Now we have the motion tokens in the vq tokenizer space, so:
+        # We need to join without space in order to avoid '_' tokens
+        section_prompt = instruction + input_section  + response_text
+        target_text = ''.join([f'<Motion_{tok}>' for tok in motion_tokens])
+        target_text += (f"</{role.capitalize()}Motion>")
 
     if task == "caption_script_to_motion":
         instruction = "### Instruction:\nGenerate a motion sequence based on the description and motion script.\n\n"
         input_section = f"### Input:\n{caption}\n\n"
         motion_script_section = wrap_script(role, motion_script_segments) + "\n\n"
         response_text = f"Response: <{role.capitalize()}Motion>"
-        # it was for when I was using motion_tokens in LLM's tokenizer space
-        # target_tokens = motion_tokens
-        # Now we have the motion tokens in the vq tokenizer space, so:
-        # We need to join without space in order to avoid '_' tokens
-        target_text = ''.join([f'<Motion_{mt_vq_id}>' for mt_vq_id in motion_tokens])
+        section_prompt = instruction + input_section + motion_script_section  + response_text
+
+        target_text = ''.join([f'<Motion_{tok}>' for tok in motion_tokens])
         target_text += (f"</{role.capitalize()}Motion>")
 
     elif task == "caption_script_audio_to_motion":
-        instruction = "### Instruction:\nGenerate a motion sequence based on description, motion script, and music.\n\n"
+        instruction = "### Instruction:\nGenerate a motion sequence based on description, and motion script.\n\n"
         input_section = f"### Input:\n{caption}\n\n"
         motion_script_section = wrap_script(role, motion_script_segments) + "\n\n"
         if use_audio:
-            audio_section = "<AudioTokens> " + " ".join(map(str, audio_tokens)) + " </AudioTokens>\n\n"
+            instruction = "### Instruction:\nGenerate a motion sequence based on description, motion script, and music.\n\n"
+            audio_section = wrap_audio(audio_tokens)
         response_text = f"Response: <{role.capitalize()}Motion>"
-        # it was for when I was using motion_tokens in LLM's tokenizer space
-        # target_tokens = motion_tokens + tokenizer(f"</{role.capitalize()}Motion>")
-        # Now we have the motion tokens in the vq tokenizer space, so:
-        target_text = ''.join([ f'<Motion_{mt_vq_id}>' for mt_vq_id in motion_tokens])
+
+        section_prompt = instruction + input_section + motion_script_section + audio_section + response_text
+
+        target_text = ''.join([ f'<Motion_{tok}>' for tok in motion_tokens])
         target_text += (f"</{role.capitalize()}Motion>")
-        # todo: this done, now we need to get the target_tokens from target text like:
-        # This goes to the next block so we ccould keep the code clean.
-        # target_tokens = tokenizer(target_text, add_special_tokens=False).input_ids
+
 
     elif task == "leader_to_follower":
-        instruction = "### Instruction:\nGiven leader motion (and optionally music), predict follower motion.\n\n"
+        instruction = "### Instruction:\nGiven leader motion, predict follower motion.\n\n"
         input_section = f"### Input:\n{caption}\n\n"
-        motion_script_section = wrap_motion("leader", leader_motion_tokens) + "\n\n"
+        # motion_script_section = wrap_motion("leader", leader_motion_tokens) + "\n\n"
+        leader_motion = "<LeaderMotion>" + \
+                        ''.join([ f'<Motion_{tok}>' for tok in leader_motion_tokens]) + \
+                        "</LeaderMotion>"
         if use_audio:
-            audio_section = "<AudioTokens> " + " ".join(map(str, audio_tokens)) + " </AudioTokens>\n\n"
+            instruction = "### Instruction:\nGiven leader motion, and music, predict follower motion.\n\n"
+            audio_section = wrap_audio(audio_tokens)
         response_text = "Response: <FollowerMotion>"
-        target_tokens = follower_motion_tokens
+
+        section_prompt = instruction + input_section + leader_motion + audio_section + response_text
+
+        target_text = ''.join([f'<Motion_{tok}>' for tok in follower_motion_tokens])
+        target_text += (f"</FollowerMotion>")
 
     elif task == "follower_to_leader":
-        instruction = "### Instruction:\nGiven follower motion (and optionally music), predict leader motion.\n\n"
+        instruction = "### Instruction:\nGiven follower motion, predict leader motion.\n\n"
         input_section = f"### Input:\n{caption}\n\n"
-        motion_script_section = wrap_motion("follower", follower_motion_tokens) + "\n\n"
+        # motion_script_section = wrap_motion("leader", leader_motion_tokens) + "\n\n"
+        follower_motion = "<FollowerMotion>" + \
+                        ''.join([f'<Motion_{tok}>' for tok in follower_motion_tokens]) + \
+                        "</FollowerMotion>"
         if use_audio:
-            audio_section = "<AudioTokens> " + " ".join(map(str, audio_tokens)) + " </AudioTokens>\n\n"
+            instruction = "### Instruction:\nGiven follower motion, and music, predict leader motion.\n\n"
+            audio_section = wrap_audio(audio_tokens)
         response_text = "Response: <LeaderMotion>"
-        target_tokens = leader_motion_tokens
+
+        section_prompt = instruction + input_section + follower_motion + audio_section + response_text
+
+        target_text = ''.join([f'<Motion_{tok}>' for tok in leader_motion_tokens])
+        target_text += (f"</LeaderMotion>")
 
     elif task == "caption_to_motionscript":
-        instruction = "### Instruction:\nGenerate a detailed motion script from the description.\n\n"
+        instruction = "### Instruction:\nGenerate a detailed motion script based on the description.\n\n"
         input_section = f"### Input:\n{caption}\n\n"
         response_text = f"Response: <{role.capitalize()}Script>"
-        target_tokens = tokenizer(wrap_script(role, motion_script_segments), add_special_tokens=False).input_ids
+
+        section_prompt = instruction + input_section + response_text
+        target_text = format_motionscript_bins(motion_script_segments) + f" </{role.capitalize()}Script>"
 
     elif task == "caption_audio_to_motionscript":
-        instruction = "### Instruction:\nGenerate a detailed motion script from description and music.\n\n"
+        instruction = "### Instruction:\nGenerate a detailed motion script based on the description and music.\n\n"
         input_section = f"### Input:\n{caption}\n\n"
-        if use_audio:
-            audio_section = "<AudioTokens> " + " ".join(map(str, audio_tokens)) + " </AudioTokens>\n\n"
+        audio_section = wrap_audio(audio_tokens)
         response_text = f"Response: <{role.capitalize()}Script>"
-        target_tokens = tokenizer(wrap_script(role, motion_script_segments), add_special_tokens=False).input_ids
+
+        section_prompt = instruction + input_section + audio_section + response_text
+        target_text = format_motionscript_bins(motion_script_segments) + f" </{role.capitalize()}Script>"
 
     elif task == "motionscript_to_motion":
         instruction = "### Instruction:\nGenerate a motion sequence from the provided motion script.\n\n"
+        input_section = f"### Input:\n{caption}\n\n"
         motion_script_section = wrap_script(role, motion_script_segments) + "\n\n"
         if use_audio:
-            audio_section = "<AudioTokens> " + " ".join(map(str, audio_tokens)) + " </AudioTokens>\n\n"
+            instruction = "### Instruction:\nGenerate a motion sequence from the provided motion script and music.\n\n"
+            audio_section = wrap_audio(audio_tokens)
         response_text = f"Response: <{role.capitalize()}Motion>"
-        target_tokens = motion_tokens
+
+        section_prompt = instruction + input_section+ motion_script_section + audio_section + response_text
+        target_text = ''.join([f'<Motion_{tok}>' for tok in motion_tokens]) + f"</{role.capitalize()}Motion>"
+
 
     elif task == "motion_to_motionscript":
         instruction = "### Instruction:\nDescribe the following motion sequence in a detailed motion script.\n\n"
-        if random.random() < 0.5:
-            chosen_role = random.choice(["leader", "follower"])
-            motion_script_section = wrap_motion(chosen_role, leader_motion_tokens if chosen_role == "leader" else follower_motion_tokens) + "\n\n"
-            response_text = f"Response: <{chosen_role.capitalize()}Script>"
-            target_tokens = tokenizer(wrap_script(chosen_role, leader_motion_script_segments if chosen_role == "leader" else follower_motion_script_segments), add_special_tokens=False).input_ids
-        else:
-            motion_script_section = wrap_motion("leader", leader_motion_tokens) + "\n\n" + wrap_motion("follower", follower_motion_tokens) + "\n\n"
-            response_text = "Response: <LeaderScript><FollowerScript>"
-            both = wrap_script("leader", leader_motion_script_segments) + "\n" + wrap_script("follower", follower_motion_script_segments)
-            target_tokens = tokenizer(both, add_special_tokens=False).input_ids
-
-    elif task == "snippet_script_to_motion":
-        instruction = "### Instruction:\nGenerate a short motion snippet from the partial motion script.\n\n"
         input_section = f"### Input:\n{caption}\n\n"
-        motion_script_section = wrap_script(role, motion_script_segments) + "\n\n"
-        if use_audio:
-            audio_section = "<AudioTokens> " + " ".join(map(str, audio_tokens)) + " </AudioTokens>\n\n"
-        response_text = f"Response: <{role.capitalize()}Motion>"
-        target_tokens = motion_tokens
+        ms = f"<{role.capitalize()}Motion>" + \
+             ''.join([f'<Motion_{tok}>' for tok in motion_tokens]) + \
+             f"</{role.capitalize()}Motion>"
+        response_text = f"Response: <{role.capitalize()}Script>"
+        section_prompt = instruction + input_section + ms  + response_text
 
-    elif task == "snippet_motion_to_script":
-        instruction = "### Instruction:\nDescribe the following motion snippet in short motion script.\n\n"
-        motion_script_section = wrap_motion(role, motion_tokens) + "\n\n"
-        response_text = "Response: <MotionScript>"
-        target_tokens = tokenizer("<MotionScript> " + format_motionscript_bins(motion_script_segments) + " </MotionScript>", add_special_tokens=False).input_ids
+        motion_script_section = format_motionscript_bins(motion_script_segments) + \
+                                f"</{role.capitalize()}Script>"
+        target_text = motion_script_section
+
+    elif task == "motion_to_caption":
+        instruction = "### Instruction:\nDescribe the following motion sequence in natural language.\n\n"
+        motion_section = "<" + role.capitalize() + "Motion>" + \
+                         ''.join([f'<Motion_{tok}>' for tok in motion_tokens]) + \
+                         f"</{role.capitalize()}Motion>\n\n"
+        audio_section = ""
+        if use_audio:
+            instruction = "### Instruction:\nDescribe the following motion sequence and music in natural language.\n\n"
+            audio_section = wrap_audio(audio_tokens)
+
+        response_text = "Response: "
+        section_prompt = instruction + motion_section + audio_section + response_text
+
+        target_text = caption  # Directly using caption as target
+
+    # -------------------------------------------------------------------
+    # -------------------------------------------------------------------
 
     elif task == "leader_motion_script_to_follower_script":
-        instruction = "### Instruction:\nGiven the leader's motion and script, predict the follower's motion script.\n\n"
+        instruction = "### Instruction:\nGiven leader's motion script and motion, predict follower's motion script.\n\n"
         input_section = f"### Input:\n{caption}\n\n"
-        motion_script_section = wrap_motion("leader", leader_motion_tokens) + "\n\n" + wrap_script("leader", leader_motion_script_segments) + "\n\n"
+        leader_script_section = wrap_script("leader", leader_motion_script_segments) + "\n\n"
+        leader_motion = "<LeaderMotion>" + \
+                        ''.join([f'<Motion_{tok}>' for tok in leader_motion_tokens]) + \
+                        "</LeaderMotion>\n\n"
         response_text = "Response: <FollowerScript>"
-        target_tokens = tokenizer(wrap_script("follower", follower_motion_script_segments), add_special_tokens=False).input_ids
+        section_prompt = instruction + input_section + leader_script_section + leader_motion + response_text
+
+        target_text = format_motionscript_bins(follower_motion_script_segments) + " </FollowerScript>"
 
     elif task == "follower_motion_script_to_leader_script":
-        instruction = "### Instruction:\nGiven the follower's motion and script, predict the leader's motion script.\n\n"
+        instruction = "### Instruction:\nGiven follower's motion script and motion, predict leader's motion script.\n\n"
         input_section = f"### Input:\n{caption}\n\n"
-        motion_script_section = wrap_motion("follower", follower_motion_tokens) + "\n\n" + wrap_script("follower", follower_motion_script_segments) + "\n\n"
+        follower_script_section = wrap_script("follower", follower_motion_script_segments) + "\n\n"
+        follower_motion = "<FollowerMotion>" + \
+                          ''.join([f'<Motion_{tok}>' for tok in follower_motion_tokens]) + \
+                          "</FollowerMotion>\n\n"
         response_text = "Response: <LeaderScript>"
-        target_tokens = tokenizer(wrap_script("leader", leader_motion_script_segments), add_special_tokens=False).input_ids
+        section_prompt = instruction + input_section + follower_script_section + follower_motion + response_text
+
+        target_text = format_motionscript_bins(leader_motion_script_segments) + " </LeaderScript>"
 
     elif task == "leader_script_to_leader_motion":
-        instruction = "### Instruction:\nGenerate leader's motion from leader's motion script.\n\n"
+        instruction = "### Instruction:\nGenerate leader's motion from the given leader's motion script.\n\n"
         input_section = f"### Input:\n{caption}\n\n"
-        motion_script_section = wrap_script("leader", leader_motion_script_segments) + "\n\n"
+        leader_script_section = wrap_script("leader", leader_motion_script_segments) + "\n\n"
         response_text = "Response: <LeaderMotion>"
-        target_tokens = leader_motion_tokens
+        section_prompt = instruction + input_section + leader_script_section + response_text
+
+        target_text = ''.join([f'<Motion_{tok}>' for tok in leader_motion_tokens]) + "</LeaderMotion>"
 
     elif task == "follower_script_to_follower_motion":
-        instruction = "### Instruction:\nGenerate follower's motion from follower's motion script.\n\n"
+        instruction = "### Instruction:\nGenerate follower's motion from the given follower's motion script.\n\n"
         input_section = f"### Input:\n{caption}\n\n"
-        motion_script_section = wrap_script("follower", follower_motion_script_segments) + "\n\n"
+        follower_script_section = wrap_script("follower", follower_motion_script_segments) + "\n\n"
         response_text = "Response: <FollowerMotion>"
-        target_tokens = follower_motion_tokens
+        section_prompt = instruction + input_section + follower_script_section + response_text
 
-    elif task == "leader_motion_script_to_follower_script_motion":
-        instruction = "### Instruction:\nGiven the leader's motion and script, predict the follower's motion script and motion.\n\n"
-        input_section = f"### Input:\n{caption}\n\n"
-        motion_script_section = wrap_motion("leader", leader_motion_tokens) + "\n\n" + wrap_script("leader", leader_motion_script_segments) + "\n\n"
-        response_text = "Response: <FollowerScript><FollowerMotion>"
-        both = wrap_script("follower", follower_motion_script_segments) + "\n" + wrap_motion("follower", follower_motion_tokens)
-        target_tokens = tokenizer(both, add_special_tokens=False).input_ids
-
-    elif task == "follower_motion_script_to_leader_script_motion":
-        instruction = "### Instruction:\nGiven the follower's motion and script, predict the leader's motion script and motion.\n\n"
-        input_section = f"### Input:\n{caption}\n\n"
-        motion_script_section = wrap_motion("follower", follower_motion_tokens) + "\n\n" + wrap_script("follower", follower_motion_script_segments) + "\n\n"
-        response_text = "Response: <LeaderScript><LeaderMotion>"
-        both = wrap_script("leader", leader_motion_script_segments) + "\n" + wrap_motion("leader", leader_motion_tokens)
-        target_tokens = tokenizer(both, add_special_tokens=False).input_ids
+        target_text = ''.join([f'<Motion_{tok}>' for tok in follower_motion_tokens]) + "</FollowerMotion>"
 
     input_ids, target_ids = [], []
     input_ids.append(tokenizer.bos_token_id)
     target_ids.append(-100)
 
-    full_prompt = system_prompt + instruction + input_section + motion_script_section + audio_section + response_text
+
+    full_prompt = system_prompt + section_prompt
     prompt_token_ids = tokenizer(full_prompt, add_special_tokens=False).input_ids
     input_ids.extend(prompt_token_ids)
     target_ids.extend([-100] * len(prompt_token_ids))

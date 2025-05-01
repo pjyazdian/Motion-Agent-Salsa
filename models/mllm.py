@@ -5,7 +5,7 @@ import torch
 from models.training_utils import *
 import numpy as np
 import models.vqvae as vqvae
-
+PAIR = True
 class MotionLLM(nn.Module):
     def __init__(self, args):
         super().__init__()
@@ -71,18 +71,45 @@ class MotionLLM(nn.Module):
 
 
         # Todo: Load the old model here and then add extra tokens
-        '''
+
         if args.resume_ckpt:
             self.load_model(args.resume_ckpt)
 
+        if PAIR:
+            NUM_AUDIO_TOKENS = 4096
+            audio_token_range = [f"<Audio_{i}>" for i in range(NUM_AUDIO_TOKENS)]
+            Salsa_special_tokens = [
+                "<LeaderScript>", "</LeaderScript>",
+                "<FollowerScript>", "</FollowerScript>",
+                "<LeaderMotion>", "</LeaderMotion>",
+                "<FollowerMotion>", "</FollowerMotion>",
+                # "<MotionScript>", "</MotionScript>",
+                # "<Motion>", "</Motion>", Already have that.
+                "<AudioTokens>", "</AudioTokens>",
+            ] + audio_token_range
+            self.tokenizer.add_tokens(Salsa_special_tokens)
+            self.llm.resize_token_embeddings(len(self.tokenizer))
 
-        Salsa_special_tokens = ['<MotionScript>', '</MotionScript>',
-                                '<SEP>', '<Motionless>',
-                                '<Audio>', '</Audio>']
-                                # Todo: +Plus Audio tokens
-        self.tokenizer.add_tokens(Salsa_special_tokens)
-        self.llm.resize_token_embeddings(len(self.tokenizer))
-        '''
+            # Define mappings from new tokens to existing tokens
+            token_mapping = {
+                "<LeaderMotion>": "<Motion>",
+                "</LeaderMotion>": "</Motion>",
+                "<FollowerMotion>": "<Motion>",
+                "</FollowerMotion>": "</Motion>",
+            }
+            # Access the model's embedding layer
+            embedding_layer = self.llm.get_input_embeddings()
+            # Initialize new token embeddings
+            for new_token, existing_token in token_mapping.items():
+                new_token_id = self.tokenizer.convert_tokens_to_ids(new_token)
+                existing_token_id = self.tokenizer.convert_tokens_to_ids(existing_token)
+                with torch.no_grad():
+                    embedding_layer.weight[new_token_id] = embedding_layer.weight[existing_token_id].clone()
+            self.required_grad_tokens_ids = []
+            for i in range(len(Salsa_special_tokens)):
+                new_token_id = self.tokenizer.convert_tokens_to_ids(Salsa_special_tokens[i])
+                self.required_grad_tokens_ids.append(new_token_id)
+                embedding_layer.weight[new_token_id].requires_grad = True
 
 
         self.llm.to(self.device)

@@ -216,7 +216,7 @@ class DataPreprocessor:
         #     self.n_out_samples_has_move = 0
 
         # create db for samples
-        map_size = 1024 * 20  # in MB
+        map_size = 1024 * 30  # in MB
         map_size <<= 20  # in B
         self.dst_lmdb_env: lmdb.Environment = lmdb.open(out_lmdb_dir, map_size=map_size)
         self.n_out_samples = 0
@@ -246,7 +246,7 @@ class DataPreprocessor:
             for clip_idx, clip in enumerate(clips):
                 self._sample_from_clip(vid, clip)
                 counter = counter + 1
-            if counter > 2: break
+            # if counter > 2: break
 
         # print number of samples
         with self.dst_lmdb_env.begin() as txn:

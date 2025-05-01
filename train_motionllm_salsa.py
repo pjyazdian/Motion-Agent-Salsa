@@ -79,10 +79,10 @@ def main():
     args = get_args_parser()
     args.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     args.resume_ckpt = 'ckpt/motionllm.pth'
-    args.use_wandb = False
+    args.use_wandb = True
 
     args.wandb_project = "Salsa-LLM"
-    args.wandb_run_name = "Fourth trial"
+    args.wandb_run_name = "Pair+RND trial"
 
     args.save_dir = f'output_trained/{args.wandb_run_name}'
     os.makedirs(args.save_dir, exist_ok=True)
