@@ -82,7 +82,7 @@ def main():
     args.use_wandb = True
 
     args.wandb_project = "Salsa-LLM"
-    args.wandb_run_name = "Pair+RND trial"
+    args.wandb_run_name = "Pair+RND trial all SMT2"
 
     args.save_dir = f'output_trained/{args.wandb_run_name}'
     os.makedirs(args.save_dir, exist_ok=True)
@@ -102,10 +102,11 @@ def main():
                     n_poses=100,
                     subdivision_stride=50,
                     pose_resampling_fps=20)
-    args.batch_size = 4
+    args.batch_size = 16
     train_loader = DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True, num_workers=0)
     args.save_every = 5
     args.epochs = 100
+    args.lr = 1e-4
     train(model, train_loader, args)
 
 

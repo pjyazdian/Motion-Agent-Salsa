@@ -548,8 +548,8 @@ def process_batch_Salsa(tokenizer, batch_aux_info, batch_ms_desc_L, batch_ms_des
             follower_motion_tokens=vq_tokens_F,
             audio_tokens=audio_tokens,
             proficiency_level=level,
-            allowed_tasks=["caption_script_to_motion"],
-            snippet_prob=0.3,
+            allowed_tasks=None,
+            snippet_prob=0.5,
             min_snippet_steps=1,
             max_snippet_steps=4,
         )
@@ -560,6 +560,13 @@ def process_batch_Salsa(tokenizer, batch_aux_info, batch_ms_desc_L, batch_ms_des
     input_ids = rnn.pad_sequence(batch_input_ids, batch_first=True, padding_value=tokenizer.pad_token_id)
     target_ids = rnn.pad_sequence(batch_target_ids, batch_first=True, padding_value=-100)
     assert input_ids.size() == target_ids.size()
+
+    with open('batch_max_tokens.txt', 'a') as f:
+        f.write(f'{input_ids.size()}\n')
+    # assert input_ids.shape[1] < max_tgt_len
+
+    with open('myfile.txt', 'a') as f:
+        f.write('Hello, world!\n')
     input_ids = input_ids[:, :max_tgt_len]
     target_ids = target_ids[:, :max_tgt_len]
     attention_mask = input_ids.ne(tokenizer.pad_token_id)
@@ -591,19 +598,23 @@ def build_random_training_instance_salsa_prompt(
         "caption_audio_to_motionscript",
         "motionscript_to_motion",
         "motion_to_motionscript",
+        "motion_completion"
     ]
 
     task = random.choice(allowed_tasks if allowed_tasks else all_tasks)
     snippet_task = task.startswith("snippet_") or random.random() < snippet_prob
 
     if task in [
+        "caption_to_motion",
         "caption_script_to_motion",
         "caption_script_audio_to_motion",
+        # "leader_to_follower",
+        # "follower_to_leader",
         "caption_to_motionscript",
         "caption_audio_to_motionscript",
         "motionscript_to_motion",
-        "leader_script_to_leader_motion",
-        "follower_script_to_follower_motion",
+        "motion_to_motionscript",
+        "motion_completion"
     ]:
         role = random.choice(["leader", "follower"])
     elif task in ["leader_to_follower", "leader_motion_script_to_follower_script", "leader_motion_script_to_follower_script_motion"]:
@@ -625,21 +636,29 @@ def build_random_training_instance_salsa_prompt(
         motion_script_segments = None
         motion_tokens = None
 
+
     if snippet_task and motion_script_segments is not None:
         snippet_size = random.randint(min_snippet_steps, max_snippet_steps)
         start_idx = random.randint(0, max(0, len(motion_script_segments) - snippet_size))
-
+        # Sampling rates:
+        # motion_script_segments → 2 per second
+        # motion_tokens → 5 per second (2.5x faster than motion_script_segments)
+        # audio_tokens → 40 per second (20x faster than motion_script_segments)
         motion_script_segments = motion_script_segments[start_idx:start_idx + snippet_size]
-        motion_tokens = motion_tokens[start_idx * 2: (start_idx + snippet_size) * 2]
+        motion_tokens = motion_tokens[start_idx * 5 // 2: (start_idx + snippet_size) * 5 // 2]
         audio_tokens = audio_tokens[start_idx * 20: (start_idx + snippet_size) * 20]
 
     allow_audio = task in [
+        # "caption_to_motion",
+        # "caption_script_to_motion",
         "caption_script_audio_to_motion",
+        # "leader_to_follower",
+        # "follower_to_leader",
+        # "caption_to_motionscript",
         "caption_audio_to_motionscript",
-        "leader_to_follower",
-        "follower_to_leader",
-        "motionscript_to_motion",
-        "snippet_script_to_motion"
+        # "motionscript_to_motion",
+        # "motion_to_motionscript",
+        # "motion_completion"
     ]
     use_audio = (audio_tokens is not None) and allow_audio and (random.random() < 0.5)
 
@@ -659,9 +678,24 @@ def build_random_training_instance_salsa_prompt(
 
 
 
+    if task == "motion_completion":
+        instruction = "### Instruction:\nGiven a partial motion sequence, complete the motion.\n\n"
+        input_section = f"### Input:\n{caption}\n\n"
 
+        # Let's slice first N tokens (e.g., first 30%)
+        split_ratio = random.uniform(0.2, 0.5)
+        split_idx = int(len(motion_tokens) * split_ratio)
+        partial_motion = f"<{role.capitalize()}Motion>" + ''.join(
+            [f'<Motion_{tok}>' for tok in motion_tokens[:split_idx]]) + f"</{role.capitalize()}Motion>  \n\n"
 
-    if task == "caption_to_motion":
+        response_text = f"Response: <{role.capitalize()}Motion>"
+
+        section_prompt = instruction + input_section + partial_motion + response_text
+
+        target_text = ''.join(
+            [f'<Motion_{tok}>' for tok in motion_tokens[split_idx:]]) + f"</{role.capitalize()}Motion>"
+
+    elif task == "caption_to_motion":
         instruction = "### Instruction:\nGenerate a motion sequence based on the description.\n\n"
         input_section = f"### Input:\n{caption}\n\n"
         response_text = f"Response: <{role.capitalize()}Motion>"
@@ -684,9 +718,10 @@ def build_random_training_instance_salsa_prompt(
         target_text += (f"</{role.capitalize()}Motion>")
 
     elif task == "caption_script_audio_to_motion":
-        instruction = "### Instruction:\nGenerate a motion sequence based on description, and motion script.\n\n"
+        instruction = "### Instruction:\nGenerate a motion sequence based on description and motion script.\n\n"
         input_section = f"### Input:\n{caption}\n\n"
         motion_script_section = wrap_script(role, motion_script_segments) + "\n\n"
+        audio_section = ''
         if use_audio:
             instruction = "### Instruction:\nGenerate a motion sequence based on description, motion script, and music.\n\n"
             audio_section = wrap_audio(audio_tokens)
@@ -705,6 +740,7 @@ def build_random_training_instance_salsa_prompt(
         leader_motion = "<LeaderMotion>" + \
                         ''.join([ f'<Motion_{tok}>' for tok in leader_motion_tokens]) + \
                         "</LeaderMotion>"
+        audio_section = ''
         if use_audio:
             instruction = "### Instruction:\nGiven leader motion, and music, predict follower motion.\n\n"
             audio_section = wrap_audio(audio_tokens)
@@ -722,6 +758,7 @@ def build_random_training_instance_salsa_prompt(
         follower_motion = "<FollowerMotion>" + \
                         ''.join([f'<Motion_{tok}>' for tok in follower_motion_tokens]) + \
                         "</FollowerMotion>"
+        audio_section = ''
         if use_audio:
             instruction = "### Instruction:\nGiven follower motion, and music, predict leader motion.\n\n"
             audio_section = wrap_audio(audio_tokens)
@@ -753,6 +790,7 @@ def build_random_training_instance_salsa_prompt(
         instruction = "### Instruction:\nGenerate a motion sequence from the provided motion script.\n\n"
         input_section = f"### Input:\n{caption}\n\n"
         motion_script_section = wrap_script(role, motion_script_segments) + "\n\n"
+        audio_section = ''
         if use_audio:
             instruction = "### Instruction:\nGenerate a motion sequence from the provided motion script and music.\n\n"
             audio_section = wrap_audio(audio_tokens)
@@ -767,7 +805,7 @@ def build_random_training_instance_salsa_prompt(
         input_section = f"### Input:\n{caption}\n\n"
         ms = f"<{role.capitalize()}Motion>" + \
              ''.join([f'<Motion_{tok}>' for tok in motion_tokens]) + \
-             f"</{role.capitalize()}Motion>"
+             f"</{role.capitalize()}Motion>" + "\n\n"
         response_text = f"Response: <{role.capitalize()}Script>"
         section_prompt = instruction + input_section + ms  + response_text
 
@@ -834,6 +872,10 @@ def build_random_training_instance_salsa_prompt(
         section_prompt = instruction + input_section + follower_script_section + response_text
 
         target_text = ''.join([f'<Motion_{tok}>' for tok in follower_motion_tokens]) + "</FollowerMotion>"
+
+
+
+
 
     input_ids, target_ids = [], []
     input_ids.append(tokenizer.bos_token_id)
