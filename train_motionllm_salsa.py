@@ -102,7 +102,7 @@ def main():
                     n_poses=100,
                     subdivision_stride=50,
                     pose_resampling_fps=20)
-    args.batch_size = 16
+    args.batch_size = 4
     train_loader = DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True, num_workers=0)
     args.save_every = 5
     args.epochs = 100

@@ -78,20 +78,20 @@ import pickle
 os.chdir('Motion-Agent-Salsa') # to refine the data loader felan.
 
 from utils.salsa_utils.libs.MotionScript.ms_utils_visu import render_HQ_Salsa
-def motionllm_evaluation():
+def motionllm_evaluation_qualitative():
 
 
     args = get_args_parser()
-    args.save_dir = "./demo/eval"
+    args.save_dir = "./demo/eval4Ahmet"
     args.device = 'cuda:0'
 
 
     model = MotionLLM(args)
     # fine-tuned on text-to-motion
-    model.load_model('output_trained/Second trial/Xmotionllm_epoch25.pth')
+    # model.load_model('output_trained/Second trial/Xmotionllm_epoch25.pth')
 
     # Baseline
-    # model.load_model('ckpt/motionllm.pth')
+    model.load_model('ckpt/motionllm.pth')
 
     model.llm.eval()
     model.llm.cuda()
@@ -99,8 +99,8 @@ def motionllm_evaluation():
 
 
     for style in SALSA_CAPTIONS:
-        if style != 'professional': continue
-        for iterate in tqdm.tqdm(range(5)):
+        # if style != 'professional': continue
+        for iterate in tqdm.tqdm(range(1)):
 
             motion_tokens_to_generate = []
             captions_list = []
@@ -117,14 +117,9 @@ def motionllm_evaluation():
             positions = recover_from_ric(torch.from_numpy(motion).float().cuda(), 22)
             # print(motion.shape)
 
-            # For Shay
-            my_dict = {'caption': caption,
-                       'HML3D_vec': motion.squeeze(),
-                       'positions': positions.squeeze().detach().cpu().numpy()}
-            # with open(f"demo/eval/{style}/motionllm_{style}_{iterate}.pk", "wb") as f:
-            #     pickle.dump(my_dict, f)
+
             if iterate < 5:
-                sav_path = f"demo/visualization_SIG/{style}"
+                sav_path = f"./demo/eval4Ahmet/{style}"
 
                 os.makedirs(sav_path, exist_ok=True)
                 plot_3d_motion(os.path.join(sav_path,
@@ -134,14 +129,21 @@ def motionllm_evaluation():
                                 fps=20, radius=4)
 
 
-                render_HQ_Salsa(positions.squeeze().detach().cpu().numpy(),
+                vertices, faces = render_HQ_Salsa(positions.squeeze().detach().cpu().numpy(),
                                 sav_path,
                                 name=f'motionllm_{style}_{iterate}_3DMesh.mp4')
 
-
+                # For Shay
+                my_dict = {'caption': caption,
+                           'HML3D_vec': motion.squeeze(),
+                           'positions': positions.squeeze().detach().cpu().numpy(),
+                           'vertuces': vertices,
+                           'faces': faces}
+                with open(f"{sav_path}/motionllm_{style}_{iterate}.pk", "wb") as f:
+                    pickle.dump(my_dict, f)
 
 if __name__ == "__main__":
 
     # motion_agent_demo()
 
-    motionllm_evaluation()
+    motionllm_evaluation_qualitative()

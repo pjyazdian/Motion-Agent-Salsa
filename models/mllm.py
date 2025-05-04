@@ -6,6 +6,7 @@ from models.training_utils import *
 import numpy as np
 import models.vqvae as vqvae
 PAIR = True
+for_old_model_inference = True
 class MotionLLM(nn.Module):
     def __init__(self, args):
         super().__init__()
@@ -20,29 +21,31 @@ class MotionLLM(nn.Module):
         self.lora_config_t2m = LoraConfig(
             r=self.args.lora_r_t2m,
             lora_alpha=self.args.lora_alpha_t2m,
-            target_modules=['embed_tokens', 'lm_head',
+            target_modules=[ # 'embed_tokens', 'lm_head',
                             'o_proj', 'q_proj', 'up_proj', 'v_proj', 'k_proj', 'down_proj', 'gate_proj'],
             lora_dropout=self.args.lora_dropout,
             bias="none",
             task_type="CAUSAL_LM",
             # trainable_token_indices=[20]
         )
-        # self.lora_config_m2t = LoraConfig(
-        #     r=self.args.lora_r_m2t,
-        #     lora_alpha=self.args.lora_alpha_m2t,
-        #     target_modules=['o_proj', 'q_proj', 'up_proj', 'v_proj', 'k_proj', 'down_proj', 'gate_proj'],
-        #     lora_dropout=self.args.lora_dropout,
-        #     bias="none",
-        #     task_type="CAUSAL_LM",
-        #     # trainable_token_indices=[257000] # PEFT version 15 support this but not guaranteed.
-        # )
+        if for_old_model_inference:
+            self.lora_config_m2t = LoraConfig(
+                r=self.args.lora_r_m2t,
+                lora_alpha=self.args.lora_alpha_m2t,
+                target_modules=['o_proj', 'q_proj', 'up_proj', 'v_proj', 'k_proj', 'down_proj', 'gate_proj'],
+                lora_dropout=self.args.lora_dropout,
+                bias="none",
+                task_type="CAUSAL_LM",
+                # trainable_token_indices=[257000] # PEFT version 15 support this but not guaranteed.
+            )
 
         self.load_motionvq()
 
         # Todo: for now we move the PEFT to the end and add embed_tokens
         #
-        # self.llm = get_peft_model(self.llm, self.lora_config_t2m, adapter_name='t2m')
-        # self.llm.add_adapter('m2t', self.lora_config_m2t)
+        if for_old_model_inference:
+            self.llm = get_peft_model(self.llm, self.lora_config_t2m, adapter_name='t2m')
+            self.llm.add_adapter('m2t', self.lora_config_m2t)
 
 
         self.tokenizer.add_tokens(['<Motion>', '</Motion>',
@@ -58,11 +61,11 @@ class MotionLLM(nn.Module):
 
 
         # Todo: Load the old model here and then add extra tokens
+        # if for_old_model_inference:
+        #     if args.resume_ckpt:
+        #         self.load_model(args.resume_ckpt)
 
-        # if args.resume_ckpt:
-        #     self.load_model(args.resume_ckpt)
-
-        if PAIR:
+        if PAIR and not for_old_model_inference:
             NUM_AUDIO_TOKENS = 4096
             audio_token_range = [f"<Audio_{i}>" for i in range(NUM_AUDIO_TOKENS)]
             Salsa_special_tokens = [

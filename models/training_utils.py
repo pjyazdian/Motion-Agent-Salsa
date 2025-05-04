@@ -528,6 +528,7 @@ def process_batch_Salsa(tokenizer, batch_aux_info, batch_ms_desc_L, batch_ms_des
                                     max_tgt_len):
 
     batch_input_ids, batch_target_ids = [], []
+    current_batch_task = random.choice(all_tasks) # we use this to avoid several random selection
     for aux, ms_desc_L, ms_des_F, vq_tokens_L, vq_tokens_F, audio_tokens in \
             zip(batch_aux_info, batch_ms_desc_L, batch_ms_des_F, \
                                batch_vq_tokens_L, batch_vq_tokens_F, \
@@ -548,7 +549,7 @@ def process_batch_Salsa(tokenizer, batch_aux_info, batch_ms_desc_L, batch_ms_des
             follower_motion_tokens=vq_tokens_F,
             audio_tokens=audio_tokens,
             proficiency_level=level,
-            allowed_tasks=None,
+            allowed_tasks=[current_batch_task],
             snippet_prob=0.5,
             min_snippet_steps=1,
             max_snippet_steps=4,
@@ -572,6 +573,20 @@ def process_batch_Salsa(tokenizer, batch_aux_info, batch_ms_desc_L, batch_ms_des
     attention_mask = input_ids.ne(tokenizer.pad_token_id)
     assert attention_mask.size() == input_ids.size()
     return input_ids, target_ids, attention_mask.long()
+
+all_tasks = [
+        "caption_to_motion",
+        "caption_script_to_motion",
+        "caption_script_audio_to_motion",
+        "leader_to_follower",
+        "follower_to_leader",
+        "caption_to_motionscript",
+        "caption_audio_to_motionscript",
+        "motionscript_to_motion",
+        "motion_to_motionscript",
+        "motion_completion"
+    ]
+
 def build_random_training_instance_salsa_prompt(
     tokenizer,
     leader_motion_script_segments,
@@ -588,18 +603,7 @@ def build_random_training_instance_salsa_prompt(
     #Todo: motion token should be in str format.
     # It means that we need to have something like 'motion_0'
 
-    all_tasks = [
-        "caption_to_motion",
-        "caption_script_to_motion",
-        "caption_script_audio_to_motion",
-        "leader_to_follower",
-        "follower_to_leader",
-        "caption_to_motionscript",
-        "caption_audio_to_motionscript",
-        "motionscript_to_motion",
-        "motion_to_motionscript",
-        "motion_completion"
-    ]
+
 
     task = random.choice(allowed_tasks if allowed_tasks else all_tasks)
     snippet_task = task.startswith("snippet_") or random.random() < snippet_prob
