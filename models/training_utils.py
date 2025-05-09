@@ -525,10 +525,11 @@ PAIR2LEVEL = {
 def process_batch_Salsa(tokenizer, batch_aux_info, batch_ms_desc_L, batch_ms_des_F,
                                     batch_vq_tokens_L, batch_vq_tokens_F,
                                     batch_audio_tokens,
-                                    max_tgt_len):
+                                    max_tgt_len, current_batch_task=None):
 
     batch_input_ids, batch_target_ids = [], []
-    current_batch_task = random.choice(all_tasks) # we use this to avoid several random selection
+    if not current_batch_task:
+        current_batch_task = random.choice(all_tasks) # we use this to avoid several random selection
     for aux, ms_desc_L, ms_des_F, vq_tokens_L, vq_tokens_F, audio_tokens in \
             zip(batch_aux_info, batch_ms_desc_L, batch_ms_des_F, \
                                batch_vq_tokens_L, batch_vq_tokens_F, \
@@ -541,7 +542,7 @@ def process_batch_Salsa(tokenizer, batch_aux_info, batch_ms_desc_L, batch_ms_des
         #                                                         motion_script_segments=ms_segments)
         #                                                         # audio)
         level = aux # PAIR2LEVEL[(aux['vid'][:5]).lower()]
-        one_input_ids, one_target_ids, task =  build_random_training_instance_salsa_prompt(
+        one_input_ids, one_target_ids, task = build_random_training_instance_salsa_prompt(
             tokenizer=tokenizer,
             leader_motion_script_segments=ms_desc_L.split('-->'),
             follower_motion_script_segments=ms_des_F.split('-->'),
@@ -562,12 +563,12 @@ def process_batch_Salsa(tokenizer, batch_aux_info, batch_ms_desc_L, batch_ms_des
     target_ids = rnn.pad_sequence(batch_target_ids, batch_first=True, padding_value=-100)
     assert input_ids.size() == target_ids.size()
 
-    with open('batch_max_tokens.txt', 'a') as f:
-        f.write(f'{input_ids.size()}\n')
+    # with open('batch_max_tokens.txt', 'a') as f:
+    #     f.write(f'{input_ids.size()}\n')
     # assert input_ids.shape[1] < max_tgt_len
 
-    with open('myfile.txt', 'a') as f:
-        f.write('Hello, world!\n')
+    # with open('myfile.txt', 'a') as f:
+    #     f.write('Hello, world!\n')
     input_ids = input_ids[:, :max_tgt_len]
     target_ids = target_ids[:, :max_tgt_len]
     attention_mask = input_ids.ne(tokenizer.pad_token_id)
@@ -599,6 +600,7 @@ def build_random_training_instance_salsa_prompt(
     snippet_prob=0.3,
     min_snippet_steps=1,
     max_snippet_steps=4,
+    inference=False
 ):
     #Todo: motion token should be in str format.
     # It means that we need to have something like 'motion_0'
@@ -889,6 +891,10 @@ def build_random_training_instance_salsa_prompt(
     full_prompt = system_prompt + section_prompt
     prompt_token_ids = tokenizer(full_prompt, add_special_tokens=False).input_ids
     input_ids.extend(prompt_token_ids)
+
+    if inference:
+        return full_prompt, input_ids
+
     target_ids.extend([-100] * len(prompt_token_ids))
 
     target_tokens = tokenizer(target_text, add_special_tokens=False).input_ids
@@ -900,6 +906,7 @@ def build_random_training_instance_salsa_prompt(
     end_token_ids = tokenizer("<eos>", add_special_tokens=False).input_ids
     input_ids.extend(end_token_ids)
     target_ids.extend(end_token_ids)
+
 
     return input_ids, target_ids, task
 

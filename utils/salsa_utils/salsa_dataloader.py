@@ -987,7 +987,7 @@ class Salsa_Dataset(Dataset):
 
         # we need to return a one str here.
 
-        return level, '-->'.join(ms_desc_L), '-->'.join(ms_des_F), vq_tokens_L, vq_tokens_F, audio_tokens
+        return level, '-->'.join(ms_desc_L), '-->'.join(ms_des_F), vq_tokens_L, vq_tokens_F, audio_tokens, aux_info
 
     def create_similarity_dataset(self, pickle_file: str, labelstxt_file: str) -> None:
         """TODO"""

@@ -41,7 +41,7 @@ def train(model, train_loader, args):
 
             # caption, ms_desc_bins, audio_tokens, motion_tokens = batch
 
-            level, ms_desc_L, ms_des_F, vq_tokens_L, vq_tokens_F, audio_tokens = batch
+            level, ms_desc_L, ms_des_F, vq_tokens_L, vq_tokens_F, audio_tokens, aux_batch = batch
             # level = PAIR2LEVEL[(aux_info['vid'][:5]).lower()]
 
 
@@ -80,9 +80,9 @@ def main():
     args.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     args.resume_ckpt = 'ckpt/motionllm.pth'
     args.use_wandb = True
-
+    args.task = "follower_to_leader"
     args.wandb_project = "Salsa-LLM"
-    args.wandb_run_name = "Pair+RND trial all SMT2"
+    args.wandb_run_name = "pretrain_all" if not args.task else args.task
 
     args.save_dir = f'output_trained/{args.wandb_run_name}'
     os.makedirs(args.save_dir, exist_ok=True)
@@ -90,12 +90,14 @@ def main():
         wandb.init(project=args.wandb_project, name=args.wandb_run_name, config=vars(args))
 
     model = MotionLLM(args)
-    # if args.resume_ckpt:
-    #     model.load_model(args.resume_ckpt)
+    # Loading pretrained model for instruction fine-tuning
+    args.resume_ckpt = 'output_trained\pretrain_all/Xmotionllm_epoch8.pth'
+    if args.resume_ckpt and args.task:
+        model.load_model(args.resume_ckpt)
 
     model.to(args.device)
 
-    # You should implement this dataset to match your caption-motion pair format
+    # You should implement this dataset to match your caption-motion pair format -- Done!
 
     train_dataset = Salsa_Dataset(args,
                     lmdb_dir='utils/salsa_utils/Salsa_Temp/lmdb_Salsa_pair/lmdb_train',
@@ -104,7 +106,7 @@ def main():
                     pose_resampling_fps=20)
     args.batch_size = 4
     train_loader = DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True, num_workers=0)
-    args.save_every = 5
+    args.save_every = 1
     args.epochs = 100
     args.lr = 1e-4
     train(model, train_loader, args)

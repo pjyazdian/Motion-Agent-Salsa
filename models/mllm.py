@@ -5,8 +5,11 @@ import torch
 from models.training_utils import *
 import numpy as np
 import models.vqvae as vqvae
+import re
+
 PAIR = True
-for_old_model_inference = True
+
+for_old_model_inference = False
 class MotionLLM(nn.Module):
     def __init__(self, args):
         super().__init__()
@@ -21,7 +24,7 @@ class MotionLLM(nn.Module):
         self.lora_config_t2m = LoraConfig(
             r=self.args.lora_r_t2m,
             lora_alpha=self.args.lora_alpha_t2m,
-            target_modules=[ # 'embed_tokens', 'lm_head',
+            target_modules=['embed_tokens', 'lm_head',
                             'o_proj', 'q_proj', 'up_proj', 'v_proj', 'k_proj', 'down_proj', 'gate_proj'],
             lora_dropout=self.args.lora_dropout,
             bias="none",
@@ -105,6 +108,8 @@ class MotionLLM(nn.Module):
             # self.llm.add_adapter('m2t', self.lora_config_m2t)
 
 
+
+
         self.llm.to(self.device)
         self.llm.eval()
 
@@ -149,7 +154,8 @@ class MotionLLM(nn.Module):
                                                                   batch_vq_tokens_L=vq_tokens_L,
                                                                   batch_vq_tokens_F=vq_tokens_F,
                                                                   batch_audio_tokens=audio_tokens,
-                                                                  max_tgt_len=700)
+                                                                  max_tgt_len=700,
+                                                                  current_batch_task=self.args.task)
 
 
 
@@ -213,6 +219,60 @@ class MotionLLM(nn.Module):
         
         # print(motion_tokens)
         return motion_tokens
+
+    def generate_Payam(self, full_prompt, inputs_ids):
+        self.llm.set_adapter('t2m')
+        self.llm.eval()
+        # inputs_ids, targets, attention_mask = process_batch_Salsa(tokenizer=self.tokenizer,
+        #                                                           batch_aux_info=level,
+        #                                                           batch_ms_desc_L=ms_desc_L,
+        #                                                           batch_ms_des_F=ms_des_F,
+        #                                                           batch_vq_tokens_L=vq_tokens_L,
+        #                                                           batch_vq_tokens_F=vq_tokens_F,
+        #                                                           batch_audio_tokens=audio_tokens,
+        #                                                           max_tgt_len=700,
+        #                                                           current_batch_task=self.args.task,
+        #                                                           )
+
+        # inputs_ids = inputs_ids.to(self.device)
+        # attention_mask = attention_mask.to(self.device)
+        # targets = targets.to(self.device)
+        # Todo: --------------------------------------------------------------------------------------------------------
+        input_ids = self.tokenizer.encode(full_prompt, return_tensors="pt").to(self.device)
+        outputs = self.llm.generate(
+            input_ids,
+            max_length=700,
+            num_beams=2,
+            early_stopping=True,
+            return_dict_in_generate=True,
+            output_scores=True
+        )
+
+        scores = torch.stack(outputs.scores)  # [num_generated_tokens, num_beams, vocab_size]
+        # print(scores.shape)
+        # Take only the best beam (beam 0)
+        best_beam_scores = scores[:, 0, :]  # [num_generated_tokens, vocab_size]
+        motion_logits = best_beam_scores[:, -(self.args.nb_code + 2):]
+        # print(motion_logits.shape)
+        motion_tokens = torch.argmax(motion_logits, dim=-1)  # [num_generated_tokens]
+        # print(motion_tokens)
+        # Remove end_of_motion token (index=1) if present
+        if 1 in motion_tokens:
+            motion_tokens = motion_tokens[:motion_tokens.tolist().index(1)]
+        # Ensure tokens don't go below 0 when adjusting for special tokens
+        motion_tokens = torch.clamp(motion_tokens - 2,
+                                    min=0)  # remove the first two special tokens while preventing negative values
+
+        # todo: this is necessary to make sure motion tokens are parsed correctly since we added more tokens e.g., audio
+        pred_logits = best_beam_scores
+        pred_tokens = torch.argmax(pred_logits, dim=-1)
+        pred_txt = self.tokenizer.decode(pred_tokens)
+        indices = [int(x) for x in re.findall(r'<Motion_(\d+)', pred_txt)]
+
+        tensor_indices = torch.tensor(indices, device='cuda:0')
+
+        # print(motion_tokens)
+        return tensor_indices # motion_tokens
     
     def caption(self, motion):
         self.llm.set_adapter('m2t')
