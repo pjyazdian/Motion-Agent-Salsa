@@ -24,7 +24,7 @@ class MotionLLM(nn.Module):
         self.lora_config_t2m = LoraConfig(
             r=self.args.lora_r_t2m,
             lora_alpha=self.args.lora_alpha_t2m,
-            target_modules=['embed_tokens', 'lm_head',
+            target_modules=[ #'embed_tokens', 'lm_head',
                             'o_proj', 'q_proj', 'up_proj', 'v_proj', 'k_proj', 'down_proj', 'gate_proj'],
             lora_dropout=self.args.lora_dropout,
             bias="none",
@@ -107,8 +107,19 @@ class MotionLLM(nn.Module):
             self.llm = get_peft_model(self.llm, self.lora_config_t2m, adapter_name='t2m')
             # self.llm.add_adapter('m2t', self.lora_config_m2t)
 
+            pefti_llm = get_peft_model(self.llm, self.lora_config_t2m, adapter_name='t2m')
+            for name, param in pefti_llm.named_parameters():
+                if 'lora' in name:
+                    print(name)
 
 
+            # required_Grads:
+            # save the lm_head of the additional tokens
+            embeddings = self.llm.get_input_embeddings().weight[self.nb_text_tokens:]
+            lm_head = self.llm.lm_head.weight[self.nb_text_tokens:]
+
+            embeddings = pefti_llm.get_input_embeddings().weight[self.nb_text_tokens:]
+            lm_head = pefti_llm.lm_head.weight[self.nb_text_tokens:]
 
         self.llm.to(self.device)
         self.llm.eval()

@@ -222,7 +222,7 @@ def motionllm_evaluation_qualitative_pairs():
     # model.load_model('output_trained/Second trial/Xmotionllm_epoch25.pth')
 
     # Baseline
-    model.load_model('output_trained/follower_to_leader/Xmotionllm_epoch91.pth')
+    model.load_model('output_trained/follower_to_leader_v2/Xmotionllm_epoch13.pth')
 
     model.llm.eval()
     model.llm.cuda()
@@ -230,9 +230,9 @@ def motionllm_evaluation_qualitative_pairs():
     motion_tokens_to_generate = []
     the_other_motion_tokens = []
 
-    Style='professional'
-    Pair="Pair3"
-    s, e = 40, 50
+    Style= 'beginner' # 'professional'
+    Pair="Pair1"
+    s, e = 0, 10
     items = load_data_pair(style=Style, pair=Pair, start_sec=s, end_sec=e)
 
 
@@ -264,11 +264,13 @@ def motionllm_evaluation_qualitative_pairs():
 
 
         motion_tokens = model.generate_Payam(full_prompt, input_ids)
+        # motion_tokens = vq_tokens_L
         motion_tokens_to_generate.append(motion_tokens)
 
         the_other_motion_tokens.append(vq_tokens_F if current_batch_task=='follower_to_leader' else vq_tokens_F)
 
-
+    #Todo ------------High priority---------------------
+    # We need to feed the first frame to keep continuity and etc.
     motion_tokens = torch.cat(motion_tokens_to_generate)
     motion = model.net.forward_decoder(motion_tokens)
     motion = model.denormalize(motion.detach().cpu().numpy())
@@ -286,7 +288,7 @@ def motionllm_evaluation_qualitative_pairs():
         plot_3d_motion(os.path.join(sav_path,
                         f"motionllm_{level}_{iterate}_predicted.mp4"),
                         t2m_kinematic_chain, positions.squeeze().detach().cpu().numpy(),
-                        title=(f"Generated: {Style} {Pair}"),
+                        title=(f"Generated {'leader' if current_batch_task=='follower_to_leader' else 'follower'}: {Style} {Pair}"),
                         fps=20, radius=4)
 
         #
@@ -323,7 +325,7 @@ def motionllm_evaluation_qualitative_pairs():
             plot_3d_motion(os.path.join(sav_path,
                                         f"motionllm_{level}_{iterate}_input.mp4"),
                            t2m_kinematic_chain, positions.squeeze().detach().cpu().numpy(),
-                           title=(f"Input: {Style} {Pair}"),
+                           title=(f"Input {'follower' if current_batch_task=='follower_to_leader' else 'leader'}: {Style} {Pair}"),
                            fps=20, radius=4)
 
             # vertices, faces = render_HQ_Salsa(positions.squeeze().detach().cpu().numpy(),

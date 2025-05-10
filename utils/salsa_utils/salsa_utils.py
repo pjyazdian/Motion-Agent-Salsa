@@ -75,7 +75,7 @@ def salsa_smplx_to_pos3d(data):
 
     return keypoints3d
 
-
+import math
 from tqdm import tqdm
 from MotionScript.stmc_renderer.humor import HumorRenderer
 def sanity_check_vide(data):
@@ -116,6 +116,12 @@ def sanity_check_vide(data):
         progress_bar=tqdm,
     )
 
+rotX = lambda theta: torch.tensor([[1, 0, 0], [0, torch.cos(theta), -torch.sin(theta)], [0, torch.sin(theta), torch.cos(theta)]])
+rotY = lambda theta: torch.tensor([[torch.cos(theta), 0, torch.sin(theta)], [0, 1, 0], [-torch.sin(theta), 0, torch.cos(theta)]])
+rotZ = lambda theta: torch.tensor([[torch.cos(theta), -torch.sin(theta), 0], [torch.sin(theta), torch.cos(theta), 0], [0, 0, 1]])
+def transf(rotMat, theta_deg, values):
+    theta_rad = math.pi * torch.tensor(theta_deg).float() / 180.0
+    return rotMat(theta_rad).mm(values.t()).t()
 
 def Salsa_smplx_body_shape(data):
 
@@ -359,6 +365,8 @@ def read_all_salsa(base_path):
         db[i].sync()
         db[i].close()
 
+
+
 def read_all_salsa_pairs(base_path):
 
     out_path = os.path.join(base_path, 'lmdb_Salsa_pair')
@@ -439,6 +447,17 @@ def read_all_salsa_pairs(base_path):
                 keypoints3d_L = salsa_smplx_to_pos3d(dict_loaded_L)
                 keypoints3d_F = salsa_smplx_to_pos3d(dict_loaded_F)
 
+                # rotate -90 def around X-axisto be consistent with common datasets e.g., HumanML3D
+                keypoints3d_L = torch.tensor(keypoints3d_L).float()
+                keypoints3d_F = torch.tensor(keypoints3d_F).float()
+                for frame_i in range(keypoints3d_F.shape[0]):
+                    keypoints3d_L[frame_i] = transf(rotX, -90, keypoints3d_L[frame_i])
+                    keypoints3d_F[frame_i] = transf(rotX, -90, keypoints3d_F[frame_i])
+                keypoints3d_L = keypoints3d_L.numpy()
+                keypoints3d_F = keypoints3d_F.numpy()
+
+
+
                 rotmat_L = salsa_smplx_to_rotmat(loaded_leader)
                 rotmat_F = salsa_smplx_to_rotmat(loaded_follower)
 
@@ -463,7 +482,7 @@ def read_all_salsa_pairs(base_path):
                 HML3D_New_Joints_Vec_F = data_F
 
 
-
+                # ----- raw data
                 raw_euler_poses_L = loaded_leader['poses']
                 raw_euler_poses_F = loaded_follower['poses']
 
@@ -493,13 +512,18 @@ def read_all_salsa_pairs(base_path):
 
                 # np.save(pjoin(save_dir1, source_file), rec_ric_data.squeeze().numpy())
                 # np.save(pjoin(save_dir2, source_file), data)
-                # Todo: motion_representation.ipynb
-                # Done!
+                # Todo: motion_representation.ipynb --> Done!
+
 
                 # # Sanity Check:
-                # save_path = '1.gif'
+                #Todo: based on the sanity check, I noticed that we need to rotate the keypoints -90 degree to make
+                # the Salsa data consistent with common motion datasets such as HumanML3D
+                # save_path = '2.gif'
                 # # HM3D_F.plot_3d_motion(save_path, kinematic_chain, New_Joints[:20], title="None", fps=20, radius=4)
-                # ARGUS = HML3D_New_Joints[:400], save_path, 'title'
+                # goto_plot = torch.tensor(keypoints3d_L[:50]).float()
+                # for frame_i in range(goto_plot.shape[0]):
+                #     goto_plot[frame_i] = transf(rotX, -90, goto_plot[frame_i])
+                # ARGUS = goto_plot[:50].numpy(), save_path, 'title'
                 # HM3D_F.plot_3d_motion_Payam(ARGUS)
 
                 # for v_i, bvh_file in enumerate(bvh_files):

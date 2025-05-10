@@ -1622,13 +1622,14 @@ def get_pose_sequence_data_from_file_Salsa_Dance_preloaded(preloaded, normalizer
     # pose_seq_data = smplx_to_pos3d_SFU(loaded)
     #
     pose_seq_data = loaded['3d_keypoints']
-    j_seq = torch.tensor(pose_seq_data)
+    j_seq = torch.tensor(pose_seq_data).float()
     adjusted_trans = torch.from_numpy(loaded['trans'])
     # # Not required:
 
-    for frame_i in range(j_seq.shape[0]):
-        j_seq[frame_i] = transf(rotX, -90, j_seq[frame_i])
-        # adjusted_trans[frame_i] = transf(rotX, -90, adjusted_trans[frame_i].unsqueeze(0)).squeeze()
+    # We remove this since it is already applied at the LMDB step 1 generation.
+    # for frame_i in range(j_seq.shape[0]):
+    #     j_seq[frame_i] = transf(rotX, -90, j_seq[frame_i])
+    #     # adjusted_trans[frame_i] = transf(rotX, -90, adjusted_trans[frame_i].unsqueeze(0)).squeeze()
 
         # j_seq[frame_i] = transf(rotY, 180, j_seq[frame_i])
         # adjusted_trans[frame_i] = transf(rotY, 180, adjusted_trans[frame_i].unsqueeze(0)).squeeze()
