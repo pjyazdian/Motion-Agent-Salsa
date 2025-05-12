@@ -180,3 +180,6 @@ wandb/
 *.png
 *.mp4
 *.mc
+*.pt
+*.pk
+*.pkl

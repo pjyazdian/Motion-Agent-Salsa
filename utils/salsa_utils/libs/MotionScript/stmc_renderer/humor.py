@@ -1,6 +1,6 @@
 import numpy as np
 import torch
-from .humor_render_tools.tools import viz_smpl_seq
+from .humor_render_tools.tools import viz_smpl_seq, viz_smpl_seq_two_people, viz_smpl_seq_two_people_camfixed
 from smplx.utils import Struct
 from .video import Video
 import os
@@ -27,6 +27,12 @@ class HumorRenderer:
         if "fps" in params:
             fps = params.pop("fps")
         render(vertices, faces, output, fps, **params)
+    def two_people(self, vertices1, faces1, vertices2, faces2, output, **kwargs):
+        params = self.kwargs | kwargs
+        fps = self.fps
+        if "fps" in params:
+            fps = params.pop("fps")
+        render_two(vertices1, faces1, vertices2, faces2, output, fps, **params)
 
 
 def render(vertices, faces, out_path, fps, progress_bar=tqdm, **kwargs):
@@ -55,7 +61,41 @@ def render(vertices, faces, out_path, fps, progress_bar=tqdm, **kwargs):
 
     video = Video(out_folder, fps=fps)
     video.save(out_path)
+def render_two(vertices1, faces1, vertices2, faces2, out_path, fps, progress_bar=tqdm, **kwargs):
+    # Put the vertices at the floor level
+    ground = min(vertices1[..., 2].min(), vertices2[..., 2].min())
+    # ground = vertices[..., 2].min()
+    # vertices[..., 2] -= ground
+    vertices1[..., 2] -= ground
+    vertices2[..., 2] -= ground
 
+
+    import pyrender
+
+    # remove title if it exists
+    kwargs.pop("title", None)
+
+    # vertices: SMPL-H vertices
+    # verts = np.load("interval_2_verts.npy")
+    out_folder = os.path.splitext(out_path)[0]
+
+    # verts = torch.from_numpy(vertices1)
+    # faces = torch.from_numpy(faces1)
+    # body_pred = Struct(v=verts, f=faces)
+    # vertices1, faces1 = torch.from_numpy(vertices1), torch.from_numpy(faces1)
+    # vertices2, faces2 = torch.from_numpy(vertices2), torch.from_numpy(faces2)
+    body_pred1 = Struct(v=torch.from_numpy(vertices1), f=torch.from_numpy(faces1))
+    body_pred2 = Struct(v=torch.from_numpy(vertices2), f=torch.from_numpy(faces2))
+
+    # out_folder, body_pred, start, end, fps, kwargs = args
+    # viz_smpl_seq(pyrender, out_folder, body_pred, fps=fps, progress_bar=progress_bar, **kwargs)
+
+    # viz_smpl_seq_two_people(pyrender, out_folder, [body_pred1, body_pred2], fps=fps, progress_bar=progress_bar, **kwargs)
+    viz_smpl_seq_two_people_camfixed(pyrender, out_folder, [body_pred1, body_pred2], fps=fps, progress_bar=progress_bar, **kwargs)
+
+
+    video = Video(out_folder, fps=fps)
+    video.save(out_path)
 
 def render_offset(args):
     import pyrender

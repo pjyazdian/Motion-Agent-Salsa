@@ -77,7 +77,7 @@ from utils.salsa_utils.salsa_dataloader import SALSA_CAPTIONS
 import pickle
 os.chdir('Motion-Agent-Salsa') # to refine the data loader felan.
 
-from utils.salsa_utils.libs.MotionScript.ms_utils_visu import render_HQ_Salsa
+from utils.salsa_utils.libs.MotionScript.ms_utils_visu import render_HQ_Salsa, render_HQ_Salsa_pair
 def motionllm_evaluation_qualitative():
 
 
@@ -222,7 +222,9 @@ def motionllm_evaluation_qualitative_pairs():
     # model.load_model('output_trained/Second trial/Xmotionllm_epoch25.pth')
 
     # Baseline
-    model.load_model('output_trained/follower_to_leader_v2/Xmotionllm_epoch13.pth')
+    # model.load_model('output_trained/follower_to_leader_v2/Xmotionllm_epoch13.pth')??
+    model.load_model('output_trained\pretrain_all/Xmotionllm_epoch5.pth')
+    model.load_model('output_trained/follower_to_leader_v3/Xmotionllm_epoch10.pth') # 'follower_to_leader'
 
     model.llm.eval()
     model.llm.cuda()
@@ -268,7 +270,7 @@ def motionllm_evaluation_qualitative_pairs():
         motion_tokens_to_generate.append(motion_tokens)
 
         the_other_motion_tokens.append(vq_tokens_F if current_batch_task=='follower_to_leader' else vq_tokens_F)
-
+    print("Inference completed.\nExporting results...")
     #Todo ------------High priority---------------------
     # We need to feed the first frame to keep continuity and etc.
     motion_tokens = torch.cat(motion_tokens_to_generate)
@@ -277,7 +279,23 @@ def motionllm_evaluation_qualitative_pairs():
     positions = recover_from_ric(torch.from_numpy(motion).float().cuda(), 22)
     # print(motion.shape)
 
+    # Leader:
+    the_other_motion_tokens = torch.cat(the_other_motion_tokens)
+    the_other_motion = model.net.forward_decoder(the_other_motion_tokens)
+    the_other_motion = model.denormalize(the_other_motion.detach().cpu().numpy())
+    the_other_positions = recover_from_ric(torch.from_numpy(the_other_motion).float().cuda(), 22)
+    # print(motion.shape)
 
+    sav_path = f"./demo/eval4pair/{level}"
+    iterate = 0
+    # Todo: test two people mesh:
+    # just for follower to leader task for now
+    leader_positions, follower_positions = the_other_positions, positions
+
+    vertices1, faces1, vertices2, faces2 = render_HQ_Salsa_pair(leader_positions.squeeze().detach().cpu().numpy(),
+                                                                follower_positions.squeeze().detach().cpu().numpy(),
+                                                                  sav_path,
+                                                                  name=f'motionllm_{level}_{iterate}_3DMesh_predicted.mp4')
 
 
     iterate = 0
@@ -291,10 +309,10 @@ def motionllm_evaluation_qualitative_pairs():
                         title=(f"Generated {'leader' if current_batch_task=='follower_to_leader' else 'follower'}: {Style} {Pair}"),
                         fps=20, radius=4)
 
-        #
-        # vertices, faces = render_HQ_Salsa(positions.squeeze().detach().cpu().numpy(),
-        #                 sav_path,
-        #                 name=f'motionllm_{level}_{iterate}_3DMesh_predicted.mp4')
+
+        vertices, faces = render_HQ_Salsa(positions.squeeze().detach().cpu().numpy(),
+                        sav_path,
+                        name=f'motionllm_{level}_{iterate}_3DMesh_predicted.mp4')
         vertices, faces = None, None
         # For Shay
         my_dict = {'caption': "infer",
@@ -328,9 +346,9 @@ def motionllm_evaluation_qualitative_pairs():
                            title=(f"Input {'follower' if current_batch_task=='follower_to_leader' else 'leader'}: {Style} {Pair}"),
                            fps=20, radius=4)
 
-            # vertices, faces = render_HQ_Salsa(positions.squeeze().detach().cpu().numpy(),
-            #                                   sav_path,
-            #                                   name=f'motionllm_{level}_{iterate}_3DMesh_input.mp4')
+            vertices, faces = render_HQ_Salsa(positions.squeeze().detach().cpu().numpy(),
+                                              sav_path,
+                                              name=f'motionllm_{level}_{iterate}_3DMesh_input.mp4')
 
             # For Shay
             my_dict = {'caption': "infer",

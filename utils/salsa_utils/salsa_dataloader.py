@@ -587,7 +587,7 @@ class DataPreprocessor:
 
         for i in tqdm(range(num_subdivision)):
 
-            if i>2:break
+            # if i>2:break
 
             start_idx = i * self.subdivision_stride
             fin_idx = start_idx + self.n_poses

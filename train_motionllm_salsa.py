@@ -80,9 +80,9 @@ def main():
     args.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     args.resume_ckpt = 'ckpt/motionllm.pth'
     args.use_wandb = True
-    args.task = 'follower_to_leader' # for pretraining #"follower_to_leader"
+    args.task = 'leader_to_follower' # 'follower_to_leader' # for pretraining #"follower_to_leader"
     args.wandb_project = "Salsa-LLM"
-    args.wandb_run_name = "pretrain_all" if not args.task else args.task + '_v2'
+    args.wandb_run_name = "pretrain_all" if not args.task else args.task + '_v3'
 
     args.save_dir = f'output_trained/{args.wandb_run_name}'
     os.makedirs(args.save_dir, exist_ok=True)
@@ -92,7 +92,7 @@ def main():
     model = MotionLLM(args)
     # Loading pretrained model for instruction fine-tuning
 
-    args.resume_ckpt = None # 'output_trained\pretrain_all/Xmotionllm_epoch8.pth'
+    args.resume_ckpt = 'output_trained\pretrain_all/Xmotionllm_epoch5.pth'
     if args.resume_ckpt and args.task:
         model.load_model(args.resume_ckpt)
 
