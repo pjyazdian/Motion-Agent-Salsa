@@ -388,7 +388,7 @@ class Text2MotionDatasetV2(data.Dataset):
                                      np.zeros((self.max_motion_length - m_length, motion.shape[1]))
                                      ], axis=0)
         # print(word_embeddings.shape, motion.shape)
-        # print(tokens)
+        # print(tokens) Todo: this is where Payam should include motion embeddings
         # FIXME: I removed the extra return value ([]) at the end
         return word_embeddings, pos_one_hots, caption, sent_len, motion, m_length, '_'.join(tokens), []
 
@@ -567,6 +567,225 @@ class PW3D_Text2MotionDatasetV2(data.Dataset):
         m_length += 1 # since we added the cannon in the begining
 
         return other_motion, pos_one_hots, caption, person_i, motion, m_length, '_'.join(tokens), []
+
+class PW3D_Text2MotionDatasetV2_salsa(data.Dataset):
+    def __init__(self, opt, mean, std, splits, w_vectorizer, **kwargs):
+        self.opt = opt
+        self.w_vectorizer = w_vectorizer
+        self.max_length = 20
+        self.pointer = 0
+        self.max_motion_length = opt.max_motion_length
+        self.min_motion_len = 80 if self.opt.dataset_name =='t2m' else 24
+        self.canon_relevant_entries = [0, 2, 6, 8]
+
+        data_dict = {}
+        base_dir = './dataset/3dpw/new_joint_vecs'
+        splits = splits.split(',')
+        group_path = [[pjoin(base_dir, s, f) for f in os.listdir(pjoin(base_dir, s)) if (f.endswith('_p0.npy') or f.endswith('_p0_M.npy'))] for s in splits]
+        id_list = list(itertools.chain.from_iterable(group_path))
+        new_name_list = []
+        length_list = []
+
+        self.load_salsa()
+        # for name in tqdm(id_list):
+        for index in range(len(self.salsa_dataset_train)):
+            level, HML3D_L, vq_tokens_L, HML3D_F, vq_tokens_F, audio_tokens, aux_info = self.salsa_dataset_train.__getitem__(index)
+
+            HML3D_L = HML3D_L.cpu().detach().numpy()
+            HML3D_F = HML3D_F.cpu().detach().numpy()
+            vq_tokens_L = vq_tokens_L.cpu().detach().numpy()
+            vq_tokens_F = vq_tokens_F.cpu().detach().numpy()
+
+            motion0 = HML3D_L
+            motion1 = HML3D_F
+            def get_canon(_name):
+                # _canon = np.load(_name.replace('new_joint_vecs', 'canon_data'))[self.canon_relevant_entries] / 10.
+                # return np.concatenate((_canon, np.zeros(self.opt.dim_pose-len(self.canon_relevant_entries))))
+                return np.zeros(self.opt.dim_pose) # just to work around the implementation
+
+            canon0 = get_canon(None)
+            canon1 = get_canon(None)
+            if not 'test' in splits:  # test is not yet annotated
+                # with open(name0.replace('new_joint_vecs', 'text').replace('p0_M', 'p0').replace('.npy', '.txt'), 'r') as fr:
+                #     texts = [t.strip() for t in fr.readlines()]
+                texts = [level + ' salsa dance.']*5
+            else:
+                texts = [''] * 5
+            assert len(texts) == 5
+            text_data = [{'caption': texts, 'tokens':['sos/OTHER', 'eos/OTHER']}]  # FIXME - parse tokens
+            new_name = f'{index}_new' # os.path.basename(name).replace('.npy', '')
+            new_name_list.append(new_name)
+            assert len(motion0) == len(motion1)
+            length_list.append(len(motion0))
+            # print('canon0', canon0)
+            # print('canon1', canon1)
+            data_dict[new_name] = {'motion0': motion0, 'motion1': motion1,
+                               'length0': len(motion0), 'length1': len(motion1),
+                               'vq_token_m0': vq_tokens_L, 'vq_token_m1': vq_tokens_F,
+                               'text': text_data, 'canon0': canon0, 'canon1': canon1,}
+
+        # replicate data for beter utilization
+        n_replications = 1 # 1000
+        rep_data_dict = {}
+        rep_name_list = []
+        rep_length_list = []
+        for rep_i in range(n_replications):
+            rep_name_list += [e+'_{:04d}'.format(rep_i) for e in new_name_list]
+            rep_length_list += length_list
+            rep_data_dict.update({
+                k+'_{:04d}'.format(rep_i): v for k, v in data_dict.items()
+            })
+
+
+        # name_list, length_list = zip(*sorted(zip(new_name_list, length_list), key=lambda x: x[1]))
+        name_list, length_list = zip(*sorted(zip(rep_name_list, rep_length_list), key=lambda x: x[1]))
+
+        self.mean = mean
+        self.std = std
+        self.length_arr = np.array(length_list)
+        self.data_dict = rep_data_dict  # data_dict
+        self.name_list = name_list
+        self.reset_max_len(self.max_length)
+
+    def reset_max_len(self, length):
+        assert length <= self.max_motion_length
+        self.pointer = np.searchsorted(self.length_arr, length)
+        print("Pointer Pointing at %d"%self.pointer)
+        self.max_length = length
+
+    def rebuilt_canon(self, canon_pred):
+        # asuumes canon data in the first 4 entries of the last dim
+        # canon_pred *= 10.
+        canon_pred_scaled = canon_pred * 10.
+        first_entry = canon_pred_scaled[..., [0]]
+        zeros = torch.zeros_like(first_entry)
+        ones = torch.ones_like(first_entry)
+        return torch.cat((canon_pred_scaled[..., [0]], zeros, canon_pred_scaled[..., [1]], zeros, ones, zeros,
+                          canon_pred_scaled[..., [2]], zeros, canon_pred_scaled[..., [3]]), dim=-1)
+
+    def inv_transform(self, data):
+        return data * self.std + self.mean
+
+    def inv_transform_torch(self, data):
+        return data * torch.tensor(self.std, dtype=data.dtype, device=data.device) + torch.tensor(self.mean, dtype=data.dtype, device=data.device)
+
+    def __len__(self):
+        return len(self.data_dict) - self.pointer
+
+    def __getitem__(self, item):
+        idx = self.pointer + item
+        data = self.data_dict[self.name_list[idx]]
+        person_i = random.randint(0,1)
+        motion, m_length, text_list, canon = data[f'motion{person_i}'], data[f'length{person_i}'], data['text'], data[f'canon{person_i}']
+        other_motion = data[f'motion{1-person_i}']
+        other_canon = data[f'canon{1-person_i}']
+
+        vq_tokens = data[f'vq_token_m{person_i}']
+        vq_tomen_other = data[f'vq_token_m{1-person_i}']
+
+        if False: # skip this since we already sampled the salsa data
+            orig_length = m_length
+            if self.opt.load_mode == 'prefix':
+                m_length = 80
+            elif self.opt.load_mode == 'text':
+                m_length = random.randint(self.min_motion_len, min(self.max_motion_length, orig_length))
+            offset = random.randint(0, orig_length-m_length-1)
+            motion = motion[offset:offset+m_length]
+            other_motion = other_motion[offset:offset+m_length]
+
+        # Randomly select a caption
+        assert len(text_list) == 1
+        text_data = text_list[0]
+        caption, tokens = random.choice(text_data['caption']), text_data['tokens']
+
+        # if len(tokens) < self.opt.max_text_len:
+        #     # pad with "unk"
+        #     tokens = ['sos/OTHER'] + tokens + ['eos/OTHER']
+        #     sent_len = len(tokens)
+        #     tokens = tokens + ['unk/OTHER'] * (self.opt.max_text_len + 2 - sent_len)
+        # else:
+        #     # crop
+        #     tokens = tokens[:self.opt.max_text_len]
+        #     tokens = ['sos/OTHER'] + tokens + ['eos/OTHER']
+        #     sent_len = len(tokens)
+        # pos_one_hots = []
+        # word_embeddings = []
+        # for token in tokens:
+        #     word_emb, pos_oh = self.w_vectorizer[token]
+        #     pos_one_hots.append(pos_oh[None, :])
+        #     word_embeddings.append(word_emb[None, :])
+        # pos_one_hots = np.concatenate(pos_one_hots, axis=0)
+        # word_embeddings = np.concatenate(word_embeddings, axis=0)
+        pos_one_hots = None
+
+        if self.opt.load_mode == 'text' and False: # Again we skip this
+            # Crop the motions in to times of 4, and introduce small variations
+            if self.opt.unit_length < 10:
+                coin2 = np.random.choice(['single', 'single', 'double'])
+            else:
+                coin2 = 'single'
+
+            if coin2 == 'double':
+                m_length = (m_length // self.opt.unit_length - 1) * self.opt.unit_length
+            elif coin2 == 'single':
+                m_length = (m_length // self.opt.unit_length) * self.opt.unit_length
+            idx = random.randint(0, len(motion) - m_length)
+            motion = motion[idx:idx+m_length]
+            other_motion = other_motion[idx:idx+m_length]
+
+
+        "Z Normalization"
+        motion = (motion - self.mean) / self.std
+        other_motion = (other_motion - self.mean) / self.std
+
+        if self.opt.load_mode == 'text':
+            if m_length < self.max_motion_length:
+                motion = np.concatenate([motion,
+                                         np.zeros((self.max_motion_length - m_length, motion.shape[1]))
+                                         ], axis=0)
+                other_motion = np.concatenate([other_motion,
+                                         np.zeros((self.max_motion_length - m_length, other_motion.shape[1]))
+                                         ], axis=0)
+
+        # print(word_embeddings.shape, motion.shape)
+        # print(tokens)
+        # return word_embeddings, pos_one_hots, caption, sent_len, motion, m_length, '_'.join(tokens)
+
+        # Concat canon data
+        motion = np.concatenate((canon[None], motion), axis=0)
+        other_motion = np.concatenate((other_canon[None], other_motion), axis=0)
+        m_length += 1 # since we added the cannon in the begining
+
+        return other_motion, pos_one_hots, caption, person_i, motion, m_length, '_'.join(tokens), [], vq_tokens, vq_tomen_other
+
+    def load_salsa(self):
+        # todo --------------------------------------------
+        # Load the salsa data:
+        import os, sys
+        parent_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '../../../../../../../'))
+        sys.path.append(parent_dir)
+        # Todo: This is somehow hardcoded, fix it later.
+        current_dir = os.getcwd()
+        from utils.salsa_utils.salsa_dataloader import Salsa_Dataset
+        os.chdir(current_dir)
+        from options.option_llm import get_args_parser
+        args_salsa = get_args_parser()
+        args_salsa.is_MDM = True
+        args_salsa.parent_dir = parent_dir
+
+        self.salsa_dataset_train = Salsa_Dataset(args_salsa,
+                                      lmdb_dir=os.path.join(parent_dir,
+                                                            'utils/salsa_utils/Salsa_Temp/lmdb_Salsa_pair/lmdb_train'),
+                                      n_poses=100,
+                                      subdivision_stride=50,
+                                      pose_resampling_fps=20)
+        # index = 0
+        # level, HML3D_L, vq_tokens_L, HML3D_F, vq_tokens_F, audio_tokens, aux_info = train_dataset.__getitem__(index)
+        # print()
+
+
+
+
 
 
 '''For training BABEL text2motion evaluators'''
@@ -1101,7 +1320,7 @@ class HumanML3D(data.Dataset):
             self.w_vectorizer = WordVectorizer(pjoin(abs_base_path, 'glove'), 'our_vab')
 
             if hasattr(opt, 'dataset_type') and opt.dataset_type == 'pw3d':
-                self.t2m_dataset = PW3D_Text2MotionDatasetV2(self.opt, self.mean, self.std, self.split,
+                self.t2m_dataset = PW3D_Text2MotionDatasetV2_salsa(self.opt, self.mean, self.std, self.split,
                                                              self.w_vectorizer)
             else:
                 self.t2m_dataset = Text2MotionDatasetV2(self.opt, self.mean, self.std, self.split_file, self.w_vectorizer, **kwargs)
@@ -1112,6 +1331,29 @@ class HumanML3D(data.Dataset):
                                           'To train and evaluate MDM you should get the FULL data as described ' \
                                           'in the README file.'
 
+        # #todo --------------------------------------------
+        # # Load the salsa data:
+        # import os, sys
+        # parent_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '../../../../../../../'))
+        # sys.path.append(parent_dir)
+        # # Todo: This is somehow hardcoded, fix it later.
+        # current_dir = os.getcwd()
+        # from utils.salsa_utils.salsa_dataloader import Salsa_Dataset
+        # os.chdir(current_dir)
+        # from options.option_llm import get_args_parser
+        # args_salsa = get_args_parser()
+        # args_salsa.is_MDM = True
+        # args_salsa.parent_dir = parent_dir
+        #
+        # train_dataset = Salsa_Dataset(args_salsa,
+        #                               lmdb_dir=os.path.join(parent_dir,
+        #                                                     'utils/salsa_utils/Salsa_Temp/lmdb_Salsa_pair/lmdb_train'),
+        #                               n_poses=100,
+        #                               subdivision_stride=50,
+        #                               pose_resampling_fps=20)
+        # index = 0
+        # level, HML3D_L, vq_tokens_L, HML3D_F, vq_tokens_F, audio_tokens, aux_info = train_dataset.__getitem__(index)
+        print()
     def __getitem__(self, item):
         return self.t2m_dataset.__getitem__(item)
 

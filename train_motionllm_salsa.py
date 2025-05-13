@@ -80,7 +80,8 @@ def main():
     args.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     args.resume_ckpt = 'ckpt/motionllm.pth'
     args.use_wandb = True
-    args.task = 'leader_to_follower' # 'follower_to_leader' # for pretraining #"follower_to_leader"
+    # for pretraining
+    args.task = 'caption_to_motion' # 'leader_to_follower' # 'follower_to_leader'
     args.wandb_project = "Salsa-LLM"
     args.wandb_run_name = "pretrain_all" if not args.task else args.task + '_v3'
 

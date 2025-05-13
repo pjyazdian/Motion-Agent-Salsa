@@ -68,6 +68,8 @@ def get_args_parser():
     
     parser.add_argument('--vis-gt', action='store_true', help='whether visualize GT motions')
     parser.add_argument('--nb-vis', default=20, type=int, help='nb of visualizations')
-    
-    
+
+    args, unknown = parser.parse_known_args()
+    print(f"Unkown arguments detected:\n{unknown}")
+    return args
     return parser.parse_args()

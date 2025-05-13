@@ -4,15 +4,20 @@ Train a diffusion model on images.
 """
 
 import os
+import sys
+parent_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+sys.path.append(parent_dir)
+os.chdir('../')
+
 import json
 from model.comMDM import ComMDM
 from utils.fixseed import fixseed
 from utils.parser_util import train_multi_args
 from utils import dist_util
-from train.training_loop import TrainLoop
+from training_loop import TrainLoop
 from data_loaders.get_data import get_dataset_loader
 from utils.model_util import create_model_and_diffusion, load_model_wo_clip, load_pretrained_mdm, load_split_mdm
-from train.train_platforms import ClearmlPlatform, TensorboardPlatform, NoPlatform  # required for the eval operation
+from train_platforms import ClearmlPlatform, TensorboardPlatform, NoPlatform  # required for the eval operation
 import torch
 
 def main():
@@ -65,3 +70,13 @@ def main():
 
 if __name__ == "__main__":
     main()
+'''
+    --pretrained_path
+    ./save/humanml_trans_enc_512/model000200000.pt
+    --multi_train_mode
+    text
+    --multi_train_splits
+    train,validation
+    --save_dir
+    ./save/my_salsa_text
+'''

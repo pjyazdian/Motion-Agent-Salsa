@@ -297,7 +297,7 @@ def motionllm_evaluation_qualitative_pairs():
                                                                   sav_path,
                                                                   name=f'motionllm_{level}_{iterate}_3DMesh_predicted.mp4')
 
-
+    exit()
     iterate = 0
     if True:
         sav_path = f"./demo/eval4pair/{level}"

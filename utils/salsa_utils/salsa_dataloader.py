@@ -57,7 +57,10 @@ class Motion_tokenizer:
         self.device = self.args.device
         # self.args.nb_joints = 22
         self.args.dataname = 't2m'
-        self.args.vq_path = "ckpt/vqvae.pth"
+        if not args.is_MDM:
+            self.args.vq_path = "ckpt/vqvae.pth"
+        if args.is_MDM:
+            self.args.vq_path = os.path.join(args.parent_dir, "ckpt/vqvae.pth")
         self.net = vqvae.HumanVQVAE(self.args, ## use args to define different parameters in different quantizers
                            self.args.nb_code,
                            self.args.code_dim,
@@ -77,9 +80,12 @@ class Motion_tokenizer:
 
         self.tokenizer = AutoTokenizer.from_pretrained(self.args.llm_backbone)
         self.nb_text_tokens = len(self.tokenizer)
-
-        self.mean = np.load('checkpoints/t2m/VQVAEV3_CB1024_CMT_H1024_NRES3/meta/mean.npy')
-        self.std = np.load('checkpoints/t2m/VQVAEV3_CB1024_CMT_H1024_NRES3/meta/std.npy')
+        if not args.is_MDM:
+            self.mean = np.load('checkpoints/t2m/VQVAEV3_CB1024_CMT_H1024_NRES3/meta/mean.npy')
+            self.std = np.load('checkpoints/t2m/VQVAEV3_CB1024_CMT_H1024_NRES3/meta/std.npy')
+        if args.is_MDM:
+            self.mean = np.load(os.path.join(args.parent_dir, 'checkpoints/t2m/VQVAEV3_CB1024_CMT_H1024_NRES3/meta/mean.npy'))
+            self.std = np.load(os.path.join(args.parent_dir, 'checkpoints/t2m/VQVAEV3_CB1024_CMT_H1024_NRES3/meta/std.npy'))
         print('Loading the HumanVQVAE model is completed!')
     def denormalize(self, motion):
         return self.mean + motion * self.std
@@ -128,8 +134,12 @@ from WavTokenizer.decoder.pretrained import WavTokenizer
 class Audio_tokenizer:
 
     def __init__(self, args):
-        WavTokenizer_relativeroot = 'utils/salsa_utils/libs/WavTokenizer'
-        config_path = config_path = os.path.join(WavTokenizer_relativeroot,'configs/wavtokenizer_smalldata_frame40_3s_nq1_code4096_dim512_kmeans200_attn.yaml')
+        if not args.is_MDM:
+            WavTokenizer_relativeroot = 'utils/salsa_utils/libs/WavTokenizer'
+        if args.is_MDM:
+            WavTokenizer_relativeroot = os.path.join(args.parent_dir, 'utils/salsa_utils/libs/WavTokenizer')
+
+        config_path = os.path.join(WavTokenizer_relativeroot,'configs/wavtokenizer_smalldata_frame40_3s_nq1_code4096_dim512_kmeans200_attn.yaml')
         model_path = os.path.join(WavTokenizer_relativeroot, 'results/train/wavtokenizer_large_unify_600_24k.ckpt')
         self.wavtokenizer = WavTokenizer.from_pretrained0802(config_path, model_path)
         self.wavtokenizer = self.wavtokenizer.to(device)
@@ -196,6 +206,7 @@ class DataPreprocessor:
         self.sentence_level = sentence_level
         self.src_lmdb_env: lmdb.Environment = lmdb.open(clip_lmdb_dir, readonly=True, lock=False)
         self.out_lmdb_dir = out_lmdb_dir
+        self.args = args
         with self.src_lmdb_env.begin() as txn:
             self.n_videos: int = txn.stat()['entries']
 
@@ -246,7 +257,7 @@ class DataPreprocessor:
             for clip_idx, clip in enumerate(clips):
                 self._sample_from_clip(vid, clip)
                 counter = counter + 1
-            # if counter > 2: break
+            if counter > 2: break
 
         # print number of samples
         with self.dst_lmdb_env.begin() as txn:
@@ -297,6 +308,8 @@ class DataPreprocessor:
 
         sample_skeleton3d_list = []
         sample_rotmat_list = []
+        sample_HML3D_joints_list = []
+        sample_HML3D_joints_vec_list = []
         sample_vqtokens_list = []
         # sample_audio_list_mels = []
         sample_audio_raw_list = []
@@ -366,25 +379,26 @@ class DataPreprocessor:
             #     output='smpl_video_path.mp4',
             #     progress_bar=tqdm,
             # )
+            sample_bin_ms = None
+            if not self.args.is_MDM:
+                S, T = 80, 140
+                S, T = 0, -1
+                input2MotionScript = {
+                                    'poses': sample_raw_euler_poses[S:T].copy(),
+                                    '3d_keypoints': sample_skeletons3d[S:T],
+                                    'trans': sample_raw_trans[S:T],
+                                    'body_betas': sample_body_betas,
+                                    'body_vertices':   None, # sample_body_vertices[S:T],
+                                    'body_faces': sample_body_faces
+                                    }
+                ablation = ['chronological']
 
-            S, T = 80, 140
-            S, T = 0, -1
-            input2MotionScript = {
-                                'poses': sample_raw_euler_poses[S:T].copy(),
-                                '3d_keypoints': sample_skeletons3d[S:T],
-                                'trans': sample_raw_trans[S:T],
-                                'body_betas': sample_body_betas,
-                                'body_vertices':   None, # sample_body_vertices[S:T],
-                                'body_faces': sample_body_faces
-                                }
-            ablation = ['chronological']
-
-            bining_details_printout, ms_non_agg, ms_agg, s, e  = MS_Salsa.MotionScript_Forward_Salsa(input2MotionScript,
-                                                motion_id=f'Win_{i}',
-                                                ablations=ablation)
-            sample_bin_ms = ms_non_agg # We pick the simples plain textual rep.
-            # import importlib
-            # importlib.reload(MS_Salsa)
+                bining_details_printout, ms_non_agg, ms_agg, s, e  = MS_Salsa.MotionScript_Forward_Salsa(input2MotionScript,
+                                                    motion_id=f'Win_{i}',
+                                                    ablations=ablation)
+                sample_bin_ms = ms_non_agg # We pick the simples plain textual rep.
+                # import importlib
+                # importlib.reload(MS_Salsa)
 
 
             subdivision_start_time = start_idx / self.skeleton_resampling_fps
@@ -468,7 +482,7 @@ class DataPreprocessor:
 
             sample_skeleton3d_list.append(sample_skeletons3d)
             sample_rotmat_list.append(sample_rotmat)
-
+            sample_HML3D_joints_vec_list.append(sample_HML3D_joints_vec)
             sample_vqtokens_list.append(sample_vqtokens)
             sample_audio_tokens_list.append(sample_audiotokens)
 
@@ -485,23 +499,24 @@ class DataPreprocessor:
         if len(sample_skeleton3d_list) > 0:
             with (self.dst_lmdb_env.begin(write=True) as txn):
 
-                for poses_keypoints3d, poses_rotmat, ms_description, \
-                    poses_vq_tokens, audio_tokens, aux in \
-                        zip(sample_skeleton3d_list, sample_rotmat_list, sample_ms_description_list,
-                            sample_vqtokens_list, sample_audio_tokens_list, aux_info): # , GPT_3_Embedding_list):
+                if not self.args.is_MDM:
+                    for poses_keypoints3d, poses_rotmat, ms_description, \
+                        poses_vq_tokens, audio_tokens, aux in \
+                            zip(sample_skeleton3d_list, sample_rotmat_list, sample_ms_description_list,
+                                sample_vqtokens_list, sample_audio_tokens_list, aux_info): # , GPT_3_Embedding_list):
 
-                    poses_keypoints3d = np.asarray(poses_keypoints3d)
-                    poses_rotmat = np.asarray(poses_rotmat)
-                    poses_vqtokens = np.asarray(poses_vq_tokens)
-                    audio_tokens = np.asarray(audio_tokens)
-                    # GPT_3_Embedding = np.array(GPT_3_Embedding)
-                    # save
-                    k = '{:010}'.format(self.n_out_samples).encode('ascii')
-                    v = [poses_keypoints3d, poses_rotmat, ms_description, poses_vqtokens, audio_tokens, aux]
-                    # v = [words, poses, audio_raws, audio_mels, aux, sentence_leve_latents, GPT_3_Embedding]
-                    v = pyarrow.serialize(v).to_buffer()
-                    txn.put(k, v)
-                    self.n_out_samples += 1
+                        poses_keypoints3d = np.asarray(poses_keypoints3d)
+                        poses_rotmat = np.asarray(poses_rotmat)
+                        poses_vqtokens = np.asarray(poses_vq_tokens)
+                        audio_tokens = np.asarray(audio_tokens)
+                        # GPT_3_Embedding = np.array(GPT_3_Embedding)
+                        # save
+                        k = '{:010}'.format(self.n_out_samples).encode('ascii')
+                        v = [poses_keypoints3d, poses_rotmat, ms_description, poses_vqtokens, audio_tokens, aux]
+                        # v = [words, poses, audio_raws, audio_mels, aux, sentence_leve_latents, GPT_3_Embedding]
+                        v = pyarrow.serialize(v).to_buffer()
+                        txn.put(k, v)
+                        self.n_out_samples += 1
 
         print()
 
@@ -552,12 +567,14 @@ class DataPreprocessor:
         # Leader's sample list
         sample_skeleton3d_list_L = []
         sample_rotmat_list_L = []
+        sample_HML3D_vec_list_L = []
         sample_vqtokens_list_L = []
         sample_ms_description_list_L = []
 
         # Follower's sample list
         sample_skeleton3d_list_F = []
         sample_rotmat_list_F = []
+        sample_HML3D_vec_list_F = []
         sample_vqtokens_list_F = []
         sample_ms_description_list_F = []
 
@@ -640,49 +657,52 @@ class DataPreprocessor:
             #     progress_bar=tqdm,
             # )
 
-            # S, T = 80, 140
-            S, T = 0, -1
-            ablation = ['chronological']
+            if not self.args.is_MDM:
+                # S, T = 80, 140
+                S, T = 0, -1
+                ablation = ['chronological']
 
-            # Leader's
-            input2MotionScript = {
-                                'poses': sample_raw_euler_poses_L[S:T].copy(),
-                                '3d_keypoints': sample_skeletons3d_L[S:T],
-                                'trans': sample_raw_trans_L[S:T],
-                                'body_betas': None,         # sample_body_betas,
-                                'body_vertices':   None,    # sample_body_vertices[S:T],
-                                'body_faces': None          # sample_body_faces
-                                }
+                # Leader's
+                input2MotionScript = {
+                                    'poses': sample_raw_euler_poses_L[S:T].copy(),
+                                    '3d_keypoints': sample_skeletons3d_L[S:T],
+                                    'trans': sample_raw_trans_L[S:T],
+                                    'body_betas': None,         # sample_body_betas,
+                                    'body_vertices':   None,    # sample_body_vertices[S:T],
+                                    'body_faces': None          # sample_body_faces
+                                    }
 
 
-            bining_details_printout, ms_non_agg_L, ms_agg_L, s, e  = \
-                MS_Salsa.MotionScript_Forward_Salsa(input2MotionScript,
-                                                motion_id=f'Win_{i}',
-                                                ablations=ablation)
-            sample_bin_ms_L = ms_agg_L # We pick the simples plain textual rep (non-aggregated).
-
-            # Follower's
-            input2MotionScript = {
-                'poses': sample_raw_euler_poses_F[S:T].copy(),
-                '3d_keypoints': sample_skeletons3d_F[S:T],
-                'trans': sample_raw_trans_F[S:T],
-                'body_betas': None,  # sample_body_betas,
-                'body_vertices': None,  # sample_body_vertices[S:T],
-                'body_faces': None  # sample_body_faces
-            }
-            bining_details_printout, ms_non_agg_F, ms_agg_F, s, e = \
-                MS_Salsa.MotionScript_Forward_Salsa(input2MotionScript,
+                bining_details_printout, ms_non_agg_L, ms_agg_L, s, e  = \
+                    MS_Salsa.MotionScript_Forward_Salsa(input2MotionScript,
                                                     motion_id=f'Win_{i}',
                                                     ablations=ablation)
+                sample_bin_ms_L = ms_agg_L # We pick the simples plain textual rep (non-aggregated).
 
-            sample_bin_ms_F = ms_agg_F
-            # We pick the simples plain
-            # textual rep (non-aggregated through time by setting max_range to zerp).
+                # Follower's
+                input2MotionScript = {
+                    'poses': sample_raw_euler_poses_F[S:T].copy(),
+                    '3d_keypoints': sample_skeletons3d_F[S:T],
+                    'trans': sample_raw_trans_F[S:T],
+                    'body_betas': None,  # sample_body_betas,
+                    'body_vertices': None,  # sample_body_vertices[S:T],
+                    'body_faces': None  # sample_body_faces
+                }
+                bining_details_printout, ms_non_agg_F, ms_agg_F, s, e = \
+                    MS_Salsa.MotionScript_Forward_Salsa(input2MotionScript,
+                                                        motion_id=f'Win_{i}',
+                                                        ablations=ablation)
+
+                sample_bin_ms_F = ms_agg_F
+                # We pick the simples plain
+                # textual rep (non-aggregated through time by setting max_range to zerp).
 
 
-            # import importlib
-            # importlib.reload(MS_Salsa)
-
+                # import importlib
+                # importlib.reload(MS_Salsa)
+            else:
+                sample_bin_ms_L = []
+                sample_bin_ms_F = []
 
             subdivision_start_time = start_idx / self.skeleton_resampling_fps
             subdivision_end_time = fin_idx / self.skeleton_resampling_fps
@@ -766,12 +786,16 @@ class DataPreprocessor:
             # Leader's
             sample_skeleton3d_list_L.append(sample_skeletons3d_L)
             sample_rotmat_list_L.append(sample_rotmat_L)
+            if self.args.is_MDM:
+                sample_HML3D_vec_list_L.append(sample_HML3D_joints_vec_L)
             sample_vqtokens_list_L.append(sample_vqtokens_L)
             sample_ms_description_list_L.append(sample_bin_ms_L)
 
             # Follower's
             sample_skeleton3d_list_F.append(sample_skeletons3d_F)
             sample_rotmat_list_F.append(sample_rotmat_F)
+            if self.args.is_MDM:
+                sample_HML3D_vec_list_F.append(sample_HML3D_joints_vec_F)
             sample_vqtokens_list_F.append(sample_vqtokens_F)
             sample_ms_description_list_F.append(sample_bin_ms_F)
 
@@ -789,36 +813,71 @@ class DataPreprocessor:
         if len(sample_skeleton3d_list_L) > 0:
             # with ((((self.dst_lmdb_env.begin(write=True) as txn)))):
             with (self.dst_lmdb_env.begin(write=True) as txn):
-                for poses_keypoints3d_L, poses_keypoints3d_F, \
-                    poses_rotmat_L, poses_rotmat_F, \
-                    ms_description_L, ms_description_F, \
-                    poses_vq_tokens_L, poses_vq_tokens_F, \
-                     audio_tokens, aux in \
-                        zip(sample_skeleton3d_list_L, sample_skeleton3d_list_F,
-                            sample_rotmat_list_L, sample_rotmat_list_F,
-                            sample_ms_description_list_L, sample_ms_description_list_F,
-                            sample_vqtokens_list_L, sample_vqtokens_list_F,
-                            sample_audio_tokens_list, aux_info):
+                if not self.args.is_MDM:
+                    for poses_keypoints3d_L, poses_keypoints3d_F, \
+                        poses_rotmat_L, poses_rotmat_F, \
+                        ms_description_L, ms_description_F, \
+                        poses_vq_tokens_L, poses_vq_tokens_F, \
+                         audio_tokens, aux in \
+                            zip(sample_skeleton3d_list_L, sample_skeleton3d_list_F,
+                                sample_rotmat_list_L, sample_rotmat_list_F,
+                                sample_ms_description_list_L, sample_ms_description_list_F,
+                                sample_vqtokens_list_L, sample_vqtokens_list_F,
+                                sample_audio_tokens_list, aux_info):
 
-                    poses_keypoints3d_L = np.asarray(poses_keypoints3d_L)
-                    poses_rotmat_L = np.asarray(poses_rotmat_L)
-                    poses_vqtokens_L = np.asarray(poses_vq_tokens_L)
+                        poses_keypoints3d_L = np.asarray(poses_keypoints3d_L)
+                        poses_rotmat_L = np.asarray(poses_rotmat_L)
+                        poses_vqtokens_L = np.asarray(poses_vq_tokens_L)
 
-                    poses_keypoints3d_F = np.asarray(poses_keypoints3d_F)
-                    poses_rotmat_F = np.asarray(poses_rotmat_F)
-                    poses_vqtokens_F = np.asarray(poses_vq_tokens_F)
+                        poses_keypoints3d_F = np.asarray(poses_keypoints3d_F)
+                        poses_rotmat_F = np.asarray(poses_rotmat_F)
+                        poses_vqtokens_F = np.asarray(poses_vq_tokens_F)
 
-                    audio_tokens = np.asarray(audio_tokens)
-                    # GPT_3_Embedding = np.array(GPT_3_Embedding)
-                    # save
-                    k = '{:010}'.format(self.n_out_samples).encode('ascii')
-                    v = [poses_keypoints3d_L, poses_rotmat_L, ms_description_L, poses_vqtokens_L,
-                         poses_keypoints3d_F, poses_rotmat_F, ms_description_F, poses_vqtokens_F,
-                         audio_tokens, aux]
-                    # v = [words, poses, audio_raws, audio_mels, aux, sentence_leve_latents, GPT_3_Embedding]
-                    v = pyarrow.serialize(v).to_buffer()
-                    txn.put(k, v)
-                    self.n_out_samples += 1
+                        audio_tokens = np.asarray(audio_tokens)
+                        # GPT_3_Embedding = np.array(GPT_3_Embedding)
+                        # save
+                        k = '{:010}'.format(self.n_out_samples).encode('ascii')
+                        v = [poses_keypoints3d_L, poses_rotmat_L, ms_description_L, poses_vqtokens_L,
+                             poses_keypoints3d_F, poses_rotmat_F, ms_description_F, poses_vqtokens_F,
+                             audio_tokens, aux]
+                        # v = [words, poses, audio_raws, audio_mels, aux, sentence_leve_latents, GPT_3_Embedding]
+                        v = pyarrow.serialize(v).to_buffer()
+                        txn.put(k, v)
+                        self.n_out_samples += 1
+                if self.args.is_MDM:
+                    for poses_keypoints3d_L, poses_keypoints3d_F, \
+                            poses_rotmat_L, poses_rotmat_F, \
+                            HML3D_vec_L, HML3D_vec_F, \
+                            ms_description_L, ms_description_F, \
+                            poses_vq_tokens_L, poses_vq_tokens_F, \
+                            audio_tokens, aux in \
+                            zip(sample_skeleton3d_list_L, sample_skeleton3d_list_F,
+                                sample_rotmat_list_L, sample_rotmat_list_F,
+                                sample_HML3D_vec_list_L, sample_HML3D_vec_list_F,
+                                sample_ms_description_list_L, sample_ms_description_list_F,
+                                sample_vqtokens_list_L, sample_vqtokens_list_F,
+                                sample_audio_tokens_list, aux_info):
+                        poses_keypoints3d_L = np.asarray(poses_keypoints3d_L)
+                        poses_rotmat_L = np.asarray(poses_rotmat_L)
+                        HML3D_vec_L = np.asarray(HML3D_vec_L)
+                        poses_vqtokens_L = np.asarray(poses_vq_tokens_L)
+
+                        poses_keypoints3d_F = np.asarray(poses_keypoints3d_F)
+                        poses_rotmat_F = np.asarray(poses_rotmat_F)
+                        HML3D_vec_F = np.asarray(HML3D_vec_F)
+                        poses_vqtokens_F = np.asarray(poses_vq_tokens_F)
+
+                        audio_tokens = np.asarray(audio_tokens)
+                        # GPT_3_Embedding = np.array(GPT_3_Embedding)
+                        # save
+                        k = '{:010}'.format(self.n_out_samples).encode('ascii')
+                        v = [poses_keypoints3d_L, poses_rotmat_L, HML3D_vec_L, ms_description_L, poses_vqtokens_L,
+                             poses_keypoints3d_F, poses_rotmat_F, HML3D_vec_F, ms_description_F, poses_vqtokens_F,
+                             audio_tokens, aux]
+                        # v = [words, poses, audio_raws, audio_mels, aux, sentence_leve_latents, GPT_3_Embedding]
+                        v = pyarrow.serialize(v).to_buffer()
+                        txn.put(k, v)
+                        self.n_out_samples += 1
 
         print()
 
@@ -916,6 +975,8 @@ class Salsa_Dataset(Dataset):
 
         print("Reading data '{}'...".format(lmdb_dir))
         preloaded_dir = lmdb_dir + "_cache"
+        if self.args.is_MDM:
+            preloaded_dir += '_MDM'
         if not os.path.exists(preloaded_dir): # TODO
             data_sampler = DataPreprocessor(
                 args,
@@ -968,10 +1029,16 @@ class Salsa_Dataset(Dataset):
 
             # pose_seq_keypoints3d, pose_seq_rotmat, vq_tokens, aux_info = sample
             # pose_seq_keypoints3d, pose_seq_rotmat, ms_desc_bins, vq_tokens, audio_tokens, aux_info = sample
-
-            poses_keypoints3d_L, poses_rotmat_L, ms_desc_L, vq_tokens_L, \
-             poses_keypoints3d_F, poses_rotmat_F, ms_des_F, vq_tokens_F, \
-             audio_tokens, aux_info = sample
+            if not self.args.is_MDM:
+                poses_keypoints3d_L, poses_rotmat_L, ms_desc_L, vq_tokens_L, \
+                 poses_keypoints3d_F, poses_rotmat_F, ms_des_F, vq_tokens_F, \
+                 audio_tokens, aux_info = sample
+            if self.args.is_MDM:
+                poses_keypoints3d_L, poses_rotmat_L, HML3D_L, ms_desc_L, vq_tokens_L, \
+                    poses_keypoints3d_F, poses_rotmat_F, HML3D_F, ms_des_F, vq_tokens_F, \
+                    audio_tokens, aux_info = sample
+                HML3D_L = torch.from_numpy(HML3D_L).to(self.args.device)
+                HML3D_F = torch.from_numpy(HML3D_F).to(self.args.device)
 
         vq_tokens_L = torch.from_numpy(vq_tokens_L).to(self.args.device)
         vq_tokens_F = torch.from_numpy(vq_tokens_F).to(self.args.device)
@@ -986,9 +1053,10 @@ class Salsa_Dataset(Dataset):
         audio_tokens = torch.from_numpy(audio_tokens).to(self.args.device)
 
         # we need to return a one str here.
-
-        return level, '-->'.join(ms_desc_L), '-->'.join(ms_des_F), vq_tokens_L, vq_tokens_F, audio_tokens, aux_info
-
+        if not self.args.is_MDM:
+            return level, '-->'.join(ms_desc_L), '-->'.join(ms_des_F), vq_tokens_L, vq_tokens_F, audio_tokens, aux_info
+        if self.args.is_MDM:
+            return level, HML3D_L, vq_tokens_L, HML3D_F, vq_tokens_F, audio_tokens, aux_info
     def create_similarity_dataset(self, pickle_file: str, labelstxt_file: str) -> None:
         """TODO"""
         # Todo: 1. Thos function gets the pickle file that I made in the clustering.py(or flowgmm) process as well

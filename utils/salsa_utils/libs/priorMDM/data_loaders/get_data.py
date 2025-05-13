@@ -76,6 +76,7 @@ def get_dataset_loader(name, batch_size, num_frames, split='train', load_mode='t
     collate = get_collate_fn(name, load_mode)
 
     n_workers = 1 if load_mode in ['movement_train', 'evaluator_train'] else 8
+    n_workers = 0 # FIXME this is for debugging...!
     loader = DataLoader(
         dataset, batch_size=batch_size, shuffle=True,
         num_workers=n_workers, drop_last=True, collate_fn=collate

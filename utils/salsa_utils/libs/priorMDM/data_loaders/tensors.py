@@ -115,9 +115,11 @@ def pw3d_collate(batch):
         'person_id': b[3],
         'tokens': b[6],
         'lengths': b[5],
+        'vq_token_input': b[8],
+        'vq_token_other': b[9],
     } for b in batch]
     return collate(adapted_batch)
-
+# other_motion, pos_one_hots, caption, person_i, motion, m_length, '_'.join(tokens), [], vq_tokens, vq_tomen_other
 from enum import IntEnum
 
 class motion_type(IntEnum):
