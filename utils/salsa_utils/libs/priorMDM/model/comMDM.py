@@ -23,6 +23,12 @@ class ComMDM(MDM):
                                              latent_dim=self.latent_dim,
                                              input_feats=self.input_feats,
                                              predict_6dof=self.args.predict_6dof)
+        self.multi_person = MultiPersonBlock_Salsa(arch=self.args.multi_arch,
+                                             fn_type=self.args.multi_func,
+                                             num_layers=self.args.multi_num_layers,
+                                             latent_dim=self.latent_dim,
+                                             input_feats=self.input_feats,
+                                             predict_6dof=self.args.predict_6dof)
 
         if self.arch == 'trans_enc':
             assert 0 < self.args.multi_backbone_split <= self.num_layers
@@ -82,8 +88,13 @@ class ComMDM(MDM):
         mid_other = self.seqTransEncoder_start(x_other)
         cur_canon = canon if self.args.predict_6dof else None
         other_canon = canon_other if self.args.predict_6dof else None
-        delta_x, canon_out = self.multi_person(cur=mid, other=mid_other, cur_canon=cur_canon,
-                                               other_canon=other_canon)
+
+        # delta_x, canon_out = self.multi_person(cur=mid, other=mid_other, cur_canon=cur_canon,
+        #                                        other_canon=other_canon)
+        delta_x, canon_out = self.multi_person(p1_canon=cur_canon, p1_motion=mid, p1_vq_token=y.get('vq_token_input', False),
+                                               p2_canon=other_canon, p2_motion=mid_other, p2_vq_token=y.get('vq_token_other', False))
+
+
         if force_no_com:
             output = self.seqTransEncoder(xseq)[1:]  # [seqlen, bs, d]
         else:
@@ -204,8 +215,9 @@ class MultiPersonBlock_Salsa(nn.Module):
             self.model = nn.TransformerEncoder(seqTransEncoderLayer,
                                                num_layers=self.num_layers)
 
+            self.vq_tokens_nb = 512
+            self.vq_proj = nn.Embedding(self.vq_tokens_nb, self.latent_dim)  # adjust if needed
 
-            self.vq_proj = nn.Linear(self.latent_dim, self.latent_dim)  # adjust if needed
 
             self.vq_cross_block = CrossAttentionBlock(
                 d_model=self.latent_dim,
@@ -215,7 +227,7 @@ class MultiPersonBlock_Salsa(nn.Module):
                 activation=self.activation
             )
 
-            self.cross_block = CrossAttentionBlock(
+            self.inter_cross_block = CrossAttentionBlock(
                 d_model=self.latent_dim,
                 nhead=self.num_heads,
                 dropout=self.dropout,
@@ -259,40 +271,49 @@ class MultiPersonBlock_Salsa(nn.Module):
 
 
         # Step 5: Apply VQ-token cross attention (optional)
-        # Assume shape: x (B, T, D), vq_self (B, T or S, D')
-        vq_proj = self.vq_proj(p1_vq_token)  # Project tokens to latent dim if needed
-        out_vq_cond = self.vq_cross_block(out.transpose(0, 1), vq_proj).transpose(0, 1)
+        p1_vq_token_aligned = p1_vq_token.repeat_interleave(4, dim=1)
+        vq_embed = self.vq_proj(p1_vq_token_aligned).permute(1, 0, 2)  # (T, B, D)
+        L, B, H = vq_embed.shape
+        pad = torch.zeros(p1_motion.shape[0]-L, B, H, dtype=vq_embed.dtype, device=vq_embed.device)
+        vq_embed = torch.cat([vq_embed, pad])
+        #     canon = torch.cat((canon, pad), axis=1)
+
+        # updated_p1 = self.vq_cross_block(p1_motion, vq_embed)
+        q = p1_motion.clone()
+        updated_p1 = self.vq_cross_block(q, vq_embed)
 
         # Step 6: Apply two-person cross attention (optional)
-        out = self.cross_block(p1_motion.transpose(0, 1), p2_motion.transpose(0, 1)).transpose(0, 1)
+        updated_p1 = self.inter_cross_block(updated_p1, p2_motion)
+
+        # Step 3: Self-attention (temporal refinement)
+        updated_p1 = self.model(updated_p1)
 
 
-        return out, canon
+        delta = updated_p1 - p1_motion
+        canon = p1_canon
+        return delta, canon
 
 
 
-
+import torch.nn.functional as F
 class CrossAttentionBlock(nn.Module):
     def __init__(self, d_model, nhead, dropout=0.1, ff_size=1024, activation='gelu'):
         super().__init__()
-        self.cross_attn = nn.MultiheadAttention(d_model, nhead, dropout=dropout, batch_first=True)
+        self.cross_attn = nn.MultiheadAttention(d_model, nhead, dropout=dropout, batch_first=False)
 
-        # LayerNorm and dropout for attention output
         self.norm1 = nn.LayerNorm(d_model)
         self.dropout1 = nn.Dropout(dropout)
 
-        # Feedforward (same structure as TransformerEncoderLayer)
         self.linear1 = nn.Linear(d_model, ff_size)
         self.activation = F.gelu if activation == 'gelu' else F.relu
         self.dropout2 = nn.Dropout(dropout)
         self.linear2 = nn.Linear(ff_size, d_model)
 
-        # LayerNorm and dropout for FFN output
         self.norm2 = nn.LayerNorm(d_model)
         self.dropout3 = nn.Dropout(dropout)
 
     def forward(self, x, context):
-        # x: (B, T, D), context: (B, S, D)
+        # x, context: (T, B, D)
         attn_out, _ = self.cross_attn(query=x, key=context, value=context)
         x = self.norm1(x + self.dropout1(attn_out))
 

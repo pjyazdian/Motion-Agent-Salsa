@@ -19,7 +19,7 @@ from data_loaders.get_data import get_dataset_loader
 from utils.model_util import create_model_and_diffusion, load_model_wo_clip, load_pretrained_mdm, load_split_mdm
 from train_platforms import ClearmlPlatform, TensorboardPlatform, NoPlatform  # required for the eval operation
 import torch
-
+torch.autograd.set_detect_anomaly(True)
 def main():
     args = train_multi_args()
     fixseed(args.seed)
@@ -63,6 +63,14 @@ def main():
     print('Trainable params: %.2fM' % (sum(p.numel() for p in model.trainable_parameters()) / 1000000.0))
     print('Multi-Person params: %.2fM' % (sum(p.numel() for p in model.multi_parameters()) / 1000000.0))
     assert sum(p.numel() for p in model.multi_parameters()) == sum(p.numel() for p in model.trainable_parameters())
+
+
+    print('Initializing WANDB...')
+    import wandb
+    wandb_project = "PriorMDM-salsa"
+    wandb_run_name = "MDM-Dance-1"
+    wandb.init(project=wandb_project, name=wandb_run_name, config=vars(args))
+    wandb.watch(model, log='all')
 
     print("Training...")
     TrainLoop(args, train_platform, model, diffusion, data).run_loop()

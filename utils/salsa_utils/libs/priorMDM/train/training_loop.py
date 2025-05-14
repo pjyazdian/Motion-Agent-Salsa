@@ -7,6 +7,7 @@ import numpy as np
 
 import blobfile as bf
 import torch
+import wandb
 from torch.optim import AdamW
 
 from diffusion import logger
@@ -25,7 +26,7 @@ from utils.misc import load_model_wo_clip
 # We found that the lg_loss_scale quickly climbed to
 # 20-21 within the first ~1K steps of training.
 INITIAL_LOG_LOSS_SCALE = 20.0
-
+import wandb
 
 class TrainLoop:
     def __init__(self, args, train_platform, model, diffusion, data):
@@ -40,7 +41,7 @@ class TrainLoop:
         self.microbatch = args.batch_size  # deprecating this option
         self.lr = args.lr
         self.log_interval = args.log_interval
-        self.save_interval = args.save_interval
+        self.save_interval = 1000 # args.save_interval
         self.resume_checkpoint = args.resume_checkpoint
         self.use_fp16 = False  # deprecating this option
         self.fp16_scale_growth = 1e-3  # deprecating this option
@@ -143,11 +144,16 @@ class TrainLoop:
                 cond['y'] = {key: val.to(self.device) if torch.is_tensor(val) else val for key, val in cond['y'].items()}
 
                 self.run_step(motion, cond)
+
+                for k, v in logger.get_current().name2val.items():
+                    if k == 'loss':
+                        wandb.log({'batch_loss': v})
+
                 if self.step % self.log_interval == 0:
                     for k, v in logger.get_current().name2val.items():
                         if k == 'loss':
                             print('step[{}]: loss[{:0.5f}]'.format(self.step+self.resume_step, v))
-
+                            wandb.log({'epoch_loss': v})
                         if k in ['step', 'samples'] or '_q' in k:
                             continue
                         else:
@@ -155,6 +161,7 @@ class TrainLoop:
 
                 if self.step % self.save_interval == 0:
                 # if (self.step + 1) % self.save_interval == 0: # Dont save 1st stake eval
+
                     self.save()
                     self.model.eval()
                     self.evaluate()
@@ -290,6 +297,7 @@ class TrainLoop:
             with bf.BlobFile(bf.join(self.save_dir, filename), "wb") as f:
                 torch.save(state_dict, f)
 
+        print(f'Saving the model... Step: {(self.step+self.resume_step):09d}')
         save_checkpoint(self.mp_trainer.master_params)
 
         with bf.BlobFile(

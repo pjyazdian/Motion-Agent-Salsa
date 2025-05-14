@@ -257,7 +257,7 @@ class DataPreprocessor:
             for clip_idx, clip in enumerate(clips):
                 self._sample_from_clip(vid, clip)
                 counter = counter + 1
-            if counter > 2: break
+            # if counter > 2: break
 
         # print number of samples
         with self.dst_lmdb_env.begin() as txn:

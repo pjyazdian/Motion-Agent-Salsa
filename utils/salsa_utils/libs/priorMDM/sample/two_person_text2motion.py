@@ -86,6 +86,22 @@ def main():
         collate_args = [dict(arg, text=txt) for arg, txt in zip(collate_args, texts)]
         _, model_kwargs = collate(collate_args)
 
+    #     todo: fix to consistent with new collate
+    data = get_dataset_loader(name=args.multi_dataset, batch_size=args.batch_size, num_frames=n_frames,
+                              split=args.multi_train_splits, load_mode=args.multi_train_mode)
+    iterator = iter(data)
+    gt_motion, cond = next(iterator)
+    n_frames = int(max(model_kwargs['y']['lengths']))
+
+    gt_motion = gt_motion.to(dist_util.dev())
+    cond['y'] = {key: val.to(dist_util.dev()) if torch.is_tensor(val) else val for key, val in cond['y'].items()}
+
+
+    model_kwargs = cond
+    # model_kwargs['inp'] = torch.zeros(n_frames)
+
+
+
     all_motions = []
     all_lengths = []
     all_text = []
@@ -221,7 +237,7 @@ def main():
     abs_path = os.path.abspath(out_path)
     print(f'[Done] Results are at [{abs_path}]')
 
-
+from data_loaders.get_data import get_dataset_loader
 def load_dataset(args, max_frames, n_frames):
     data = get_dataset_loader(name=args.multi_dataset,
                               batch_size=args.batch_size,
@@ -234,3 +250,18 @@ def load_dataset(args, max_frames, n_frames):
 
 if __name__ == "__main__":
     main()
+
+
+    '''
+    
+    --model_path
+./save/my_salsa_text_trained/model000000000.pt
+--input_text
+./assets/two_person_text_prompts.txt
+    
+    --model_path
+./trained_outputs/pw3d_text/model000100000.pt
+--input_text
+./assets/two_person_text_prompts.txt
+    
+    '''

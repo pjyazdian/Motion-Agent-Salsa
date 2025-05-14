@@ -232,8 +232,8 @@ def motionllm_evaluation_qualitative_pairs():
     motion_tokens_to_generate = []
     the_other_motion_tokens = []
 
-    Style= 'beginner' # 'professional'
-    Pair="Pair1"
+    Style = 'beginner' # 'professional'
+    Pair = "Pair1"
     s, e = 0, 10
     items = load_data_pair(style=Style, pair=Pair, start_sec=s, end_sec=e)
 
@@ -286,21 +286,22 @@ def motionllm_evaluation_qualitative_pairs():
     the_other_positions = recover_from_ric(torch.from_numpy(the_other_motion).float().cuda(), 22)
     # print(motion.shape)
 
-    sav_path = f"./demo/eval4pair/{level}"
+    sav_path = f"./demo/eval4Bermet/{current_batch_task}/{level}"
     iterate = 0
     # Todo: test two people mesh:
     # just for follower to leader task for now
     leader_positions, follower_positions = the_other_positions, positions
+    if False:
+        vertices1, faces1, vertices2, faces2 = render_HQ_Salsa_pair(leader_positions.squeeze().detach().cpu().numpy(),
+                                                                    follower_positions.squeeze().detach().cpu().numpy(),
+                                                                      sav_path,
+                                                                      name=f'motionllm_{level}_{iterate}_3DMesh_predicted.mp4')
 
-    vertices1, faces1, vertices2, faces2 = render_HQ_Salsa_pair(leader_positions.squeeze().detach().cpu().numpy(),
-                                                                follower_positions.squeeze().detach().cpu().numpy(),
-                                                                  sav_path,
-                                                                  name=f'motionllm_{level}_{iterate}_3DMesh_predicted.mp4')
+        exit()
 
-    exit()
     iterate = 0
     if True:
-        sav_path = f"./demo/eval4pair/{level}"
+        sav_path = f"./demo/eval4Bermet/{current_batch_task}/{level}"
 
         os.makedirs(sav_path, exist_ok=True)
         plot_3d_motion(os.path.join(sav_path,
@@ -310,9 +311,9 @@ def motionllm_evaluation_qualitative_pairs():
                         fps=20, radius=4)
 
 
-        vertices, faces = render_HQ_Salsa(positions.squeeze().detach().cpu().numpy(),
-                        sav_path,
-                        name=f'motionllm_{level}_{iterate}_3DMesh_predicted.mp4')
+        # vertices, faces = render_HQ_Salsa(positions.squeeze().detach().cpu().numpy(),
+        #                 sav_path,
+        #                 name=f'motionllm_{level}_{iterate}_3DMesh_predicted.mp4')
         vertices, faces = None, None
         # For Shay
         my_dict = {'caption': "infer",
@@ -329,7 +330,7 @@ def motionllm_evaluation_qualitative_pairs():
 
 
         # Leader:
-        the_other_motion_tokens = torch.cat(the_other_motion_tokens)
+        # the_other_motion_tokens = torch.cat(the_other_motion_tokens)
         motion = model.net.forward_decoder(the_other_motion_tokens)
         motion = model.denormalize(motion.detach().cpu().numpy())
         positions = recover_from_ric(torch.from_numpy(motion).float().cuda(), 22)
@@ -337,7 +338,7 @@ def motionllm_evaluation_qualitative_pairs():
 
         iterate = 0
         if True:
-            sav_path = f"./demo/eval4pair/{level}"
+            # sav_path = f"./demo/eval4Bermet/{level}"
 
             os.makedirs(sav_path, exist_ok=True)
             plot_3d_motion(os.path.join(sav_path,
@@ -346,9 +347,9 @@ def motionllm_evaluation_qualitative_pairs():
                            title=(f"Input {'follower' if current_batch_task=='follower_to_leader' else 'leader'}: {Style} {Pair}"),
                            fps=20, radius=4)
 
-            vertices, faces = render_HQ_Salsa(positions.squeeze().detach().cpu().numpy(),
-                                              sav_path,
-                                              name=f'motionllm_{level}_{iterate}_3DMesh_input.mp4')
+            # vertices, faces = render_HQ_Salsa(positions.squeeze().detach().cpu().numpy(),
+            #                                   sav_path,
+            #                                   name=f'motionllm_{level}_{iterate}_3DMesh_input.mp4')
 
             # For Shay
             my_dict = {'caption': "infer",
@@ -428,8 +429,8 @@ def motionllm_evaluation_qualitative():
 
 from utils.salsa_utils.salsa_dataloader import Salsa_Dataset
 def load_data_pair(style='beginner', pair="Pair1", start_sec=0, end_sec=5):
-    args = args = get_args_parser()
-
+    args = get_args_parser()
+    args.is_MDM = False
     train_dataset = Salsa_Dataset(args,
                     lmdb_dir='utils/salsa_utils/Salsa_Temp/lmdb_Salsa_pair/lmdb_train',
                     n_poses=100,

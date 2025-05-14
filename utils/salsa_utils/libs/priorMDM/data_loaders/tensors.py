@@ -62,6 +62,12 @@ def collate(batch):
         textbatch = [b['tokens'] for b in notnone_batches]
         cond['y'].update({'tokens': textbatch})
 
+    if 'vq_token_input' in notnone_batches[0]: # added to
+        vq_token_input_batch = torch.stack([torch.from_numpy(b['vq_token_input']) for b in notnone_batches])
+        vq_token_other_batch = torch.stack([torch.from_numpy(b['vq_token_other']) for b in notnone_batches])
+        cond['y'].update({'vq_token_input': vq_token_input_batch})
+        cond['y'].update({'vq_token_other': vq_token_other_batch})
+
     if 'action' in notnone_batches[0]:
         actionbatch = [b['action'] for b in notnone_batches]
         cond['y'].update({'action': torch.as_tensor(actionbatch).unsqueeze(1)})

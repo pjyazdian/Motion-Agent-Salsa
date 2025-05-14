@@ -1353,7 +1353,7 @@ class HumanML3D(data.Dataset):
         #                               pose_resampling_fps=20)
         # index = 0
         # level, HML3D_L, vq_tokens_L, HML3D_F, vq_tokens_F, audio_tokens, aux_info = train_dataset.__getitem__(index)
-        print()
+
     def __getitem__(self, item):
         return self.t2m_dataset.__getitem__(item)
 
