@@ -884,7 +884,9 @@ class DataPreprocessor:
 # Todo -----------------------------------------------------------------
 PAIR2LEVEL = {
     f"pair{i}": level
-    for i, level in zip(range(1, 10), ["beginner", "intermediate", "professional"] * 3)
+    for i, level in zip(range(1, 10), ["beginner", "intermediate", "beginner",
+                                       "intermediate", "professional", "intermediate",
+                                       "professional", "beginner", "professional"], )
 }
 
 SALSA_CAPTIONS = {
