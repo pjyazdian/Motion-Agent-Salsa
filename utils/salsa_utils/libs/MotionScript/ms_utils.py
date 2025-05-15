@@ -315,6 +315,7 @@ def get_pose_data_from_file(pose_info):
 
 rotX = lambda theta: torch.tensor(
             [[1, 0, 0], [0, torch.cos(theta), -torch.sin(theta)], [0, torch.sin(theta), torch.cos(theta)]]).to(torch.float64)
+
 rotY = lambda theta: torch.tensor(
             [[torch.cos(theta), 0, torch.sin(theta)], [0, 1, 0], [-torch.sin(theta), 0, torch.cos(theta)]]).to(torch.float64)
 rotZ = lambda theta: torch.tensor(

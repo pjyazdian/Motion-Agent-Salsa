@@ -9,7 +9,7 @@ import re
 
 PAIR = True
 
-for_old_model_inference = False
+for_old_model_inference = True
 class MotionLLM(nn.Module):
     def __init__(self, args):
         super().__init__()
@@ -120,7 +120,9 @@ class MotionLLM(nn.Module):
 
             embeddings = pefti_llm.get_input_embeddings().weight[self.nb_text_tokens:]
             lm_head = pefti_llm.lm_head.weight[self.nb_text_tokens:]
-
+        else: # inference old model
+            self.llm = get_peft_model(self.llm, self.lora_config_t2m, adapter_name='t2m')
+            self.llm.add_adapter('m2t', self.lora_config_m2t)
         self.llm.to(self.device)
         self.llm.eval()
 
@@ -252,7 +254,7 @@ class MotionLLM(nn.Module):
         input_ids = self.tokenizer.encode(full_prompt, return_tensors="pt").to(self.device)
         outputs = self.llm.generate(
             input_ids,
-            max_length=700,
+            max_length=200, # todo: 200 for baseline 700 for ours
             num_beams=2,
             early_stopping=True,
             return_dict_in_generate=True,
@@ -273,6 +275,7 @@ class MotionLLM(nn.Module):
         # Ensure tokens don't go below 0 when adjusting for special tokens
         motion_tokens = torch.clamp(motion_tokens - 2,
                                     min=0)  # remove the first two special tokens while preventing negative values
+        if for_old_model_inference: return motion_tokens
 
         # todo: this is necessary to make sure motion tokens are parsed correctly since we added more tokens e.g., audio
         pred_logits = best_beam_scores

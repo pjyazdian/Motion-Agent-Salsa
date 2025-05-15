@@ -600,7 +600,8 @@ def build_random_training_instance_salsa_prompt(
     snippet_prob=0.3,
     min_snippet_steps=1,
     max_snippet_steps=4,
-    inference=False
+    inference=False,
+    is_baseline=False
 ):
     #Todo: motion token should be in str format.
     # It means that we need to have something like 'motion_0'
@@ -889,6 +890,11 @@ def build_random_training_instance_salsa_prompt(
 
 
     full_prompt = system_prompt + section_prompt
+
+    if is_baseline:
+        full_prompt = full_prompt.replace('FollowerMotion', 'Motion')
+        full_prompt = full_prompt.replace('LeaderMotion', 'Motion')
+
     prompt_token_ids = tokenizer(full_prompt, add_special_tokens=False).input_ids
     input_ids.extend(prompt_token_ids)
 

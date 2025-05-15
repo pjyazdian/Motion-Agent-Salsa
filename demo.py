@@ -222,14 +222,20 @@ def motionllm_evaluation_qualitative_pairs():
     # model.load_model('output_trained/Second trial/Xmotionllm_epoch25.pth')
 
     # Baseline
-    # model.load_model('output_trained/follower_to_leader_v2/Xmotionllm_epoch13.pth')??
-    model.load_model('output_trained\pretrain_all/Xmotionllm_epoch5.pth')
+    is_baseline = True
+    model = MotionLLM(args) # this should be manually fixed in mllm.py
+    model.load_model('ckpt/motionllm.pth')
+    current_batch_task = 'caption_to_motion'
 
-    model.load_model('output_trained/follower_to_leader_v3/Xmotionllm_epoch10.pth') # 'follower_to_leader'
-    current_batch_task = 'follower_to_leader'
+    # model.load_model('output_trained\pretrain_all/Xmotionllm_epoch5.pth')
 
-    model.load_model('output_trained/leader_to_follower_v3/Xmotionllm_epoch42.pth')  # 'follower_to_leader'
-    current_batch_task = 'leader_to_follower'
+    # model.load_model('output_trained\pretrain_all/Xmotionllm_epoch5.pth')
+
+    # model.load_model('output_trained/follower_to_leader_v3/Xmotionllm_epoch10.pth') # 'follower_to_leader'
+    # current_batch_task = 'follower_to_leader'
+
+    # model.load_model('output_trained/leader_to_follower_v3/Xmotionllm_epoch42.pth')  # 'follower_to_leader'
+    # current_batch_task = 'leader_to_follower'
 
 
     # model.load_model('output_trained/caption_to_motion_v3/Xmotionllm_epoch100.pth')  # 'follower_to_leader'
@@ -270,6 +276,8 @@ def motionllm_evaluation_qualitative_pairs():
         items = load_data_pair(style=Style, pair=Pair, take=my_take, start_sec=s, end_sec=e)
         if items==[]:
             print("Missing!!! ", Pair, Style, my_take)
+            with open("Missings_infer.txt", "a") as f:
+                f.write(f"{Style} | {Pair} | {my_take}\n")
             continue
         args.is_MDM = True # at the inference to get GT
 
@@ -304,7 +312,8 @@ def motionllm_evaluation_qualitative_pairs():
                 snippet_prob=0.5,
                 min_snippet_steps=1,
                 max_snippet_steps=4,
-                inference=True
+                inference=True,
+                is_baseline=True
             )
 
 
@@ -453,6 +462,40 @@ def motionllm_evaluation_qualitative_pairs():
             with open(f"{sav_path}/motionllm_{level}_{iterate}_follower_GT.pk", "wb") as f:
                 pickle.dump(my_dict, f)
 
+
+        # for Shay
+        if False:
+            #         Draw for shay: [22, 3] shay is [165]
+            import math
+            rotX = lambda theta: torch.tensor([[1, 0, 0], [0, torch.cos(theta), -torch.sin(theta)], [0, torch.sin(theta), torch.cos(theta)]])
+            rotY = lambda theta: torch.tensor([[torch.cos(theta), 0, torch.sin(theta)], [0, 1, 0], [-torch.sin(theta), 0, torch.cos(theta)]])
+            rotZ = lambda theta: torch.tensor([[torch.cos(theta), -torch.sin(theta), 0], [torch.sin(theta), torch.cos(theta), 0], [0, 0, 1]])
+
+            def transf(rotMat, theta_deg, values):
+                theta_rad = (math.pi * torch.tensor(theta_deg).float() / 180.0).to(torch.float)
+                return rotMat(theta_rad).mm(values.t()).t()
+            import numpy as np
+            folder_path = 'Shay/duolando_follower_gen'  # replace with your folder path
+            sav_path = folder_path
+            for filename in os.listdir(folder_path):
+                if filename.endswith('.npy'):
+                    file_path = os.path.join(folder_path, filename)
+                    data = np.load(file_path)
+                    data = torch.from_numpy(data)
+                    j_seq = data.view(data.shape[0], data.shape[1], -1, 3)
+                    for b in range(j_seq.shape[0]):
+                        for frame_i in range(j_seq.shape[1]):
+                            j_seq[b, frame_i] = transf(rotX, -90, j_seq[b, frame_i])
+                        print(f"Loaded {filename}, shape: {data.shape}")
+                        plot_3d_motion(os.path.join(sav_path,
+                                                    filename.replace('npy', 'mp4')),
+                                       t2m_kinematic_chain, j_seq[:, :, :].squeeze().detach().cpu().numpy(),
+                                       title='aa',
+
+                                       fps=20, radius=4)
+
+
+
 '''
 def motionllm_evaluation_qualitative():
 
@@ -548,7 +591,7 @@ def load_data_pair(style='beginner', pair="Pair1", take='take1_1', start_sec=0, 
                 vq_tokens_L, vq_tokens_F, audio_tokens, aux_info = train_dataset.__getitem__(index)
         else:
             level, HML3D_L, vq_tokens_L, HML3D_F, vq_tokens_F, audio_tokens, aux_info = train_dataset.__getitem__(index)
-        level = style
+        level = style #todo fixeme: cheating at the inference time due to incorrect lmdb processing at the time.
         if level==style and \
                 aux_info['start_time']>=start_sec and \
                 aux_info['end_time'] <= end_sec and \
